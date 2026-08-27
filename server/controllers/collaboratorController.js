@@ -1,0 +1,317 @@
+const Project = require('../models/Project');
+const Chat = require('../models/Chat');
+const { emitSystemMessage } = require('../sockets/chatSocket');
+const { asyncHandler, AppError } = require('../middleware/errorHandler');
+
+let ioInstance = null;
+const setIo = (io) => { ioInstance = io; };
+
+const checkAndLockProject = async (project) => {
+  const activeCollaborators = project.collaborators.filter(
+    (c) => c.inviteStatus === 'accepted'
+  );
+
+  if (activeCollaborators.length === 0) return false;
+
+  const allTermsAccepted = activeCollaborators.every((c) => c.termsStatus === 'accepted');
+
+  if (allTermsAccepted && project.status !== 'locked') {
+    project.status = 'locked';
+    await project.save();
+
+    if (project.groupChatId && ioInstance) {
+      await emitSystemMessage(
+        ioInstance,
+        project.groupChatId,
+        project.ownerId,
+        'All parties have accepted the terms. The event plan is now locked in!',
+        'project_locked'
+      );
+    }
+    return true;
+  }
+  return false;
+};
+
+// @route POST /api/projects/:id/invite
+const inviteCollaborator = asyncHandler(async (req, res) => {
+  const { targetUserId, vendorCategory, chatId } = req.body;
+  const project = await Project.findById(req.params.id);
+
+  if (!project) throw new AppError('Project not found', 404);
+  if (!project.ownerId.equals(req.user.id)) {
+    throw new AppError('Only the owner can invite collaborators', 403);
+  }
+  if (['locked', 'in_progress', 'completed'].includes(project.status)) {
+    throw new AppError('Cannot invite to a locked or completed project', 400);
+  }
+
+  let collaborator = project.collaborators.find((c) => c.userId.equals(targetUserId));
+
+  if (collaborator) {
+    if (collaborator.inviteStatus === 'accepted') {
+      throw new AppError('This vendor is already part of the project', 409);
+    }
+    collaborator.inviteStatus = 'pending';
+    collaborator.termsStatus = 'not_submitted';
+    collaborator.proposedTerms = {};
+    collaborator.chatId = chatId || collaborator.chatId;
+    collaborator.history.push({ event: 're-invited' });
+  } else {
+    project.collaborators.push({
+      userId: targetUserId,
+      vendorCategory,
+      inviteStatus: 'pending',
+      termsStatus: 'not_submitted',
+      chatId: chatId || null,
+      history: [{ event: 'invited' }]
+    });
+  }
+
+  project.status = 'pending_approval';
+  await project.save();
+
+  if (chatId && ioInstance) {
+    await emitSystemMessage(
+      ioInstance,
+      chatId,
+      req.user.id,
+      `You've been invited to collaborate on the project "${project.title}" as ${vendorCategory}.`,
+      'invite_sent'
+    );
+  }
+
+  res.status(200).json(project);
+});
+
+// @route POST /api/projects/:id/invite/respond
+const respondToInvite = asyncHandler(async (req, res) => {
+  const { accept } = req.body;
+  const project = await Project.findById(req.params.id);
+
+  if (!project) throw new AppError('Project not found', 404);
+
+  const collaborator = project.collaborators.find((c) => c.userId.equals(req.user.id));
+  if (!collaborator) throw new AppError('You were not invited to this project', 404);
+  if (collaborator.inviteStatus !== 'pending') {
+    throw new AppError('This invite is no longer pending', 400);
+  }
+
+  if (accept) {
+    collaborator.inviteStatus = 'accepted';
+    collaborator.termsStatus = 'pending';
+    collaborator.history.push({ event: 'accepted' });
+
+    let groupChat;
+    if (project.groupChatId) {
+      groupChat = await Chat.findById(project.groupChatId);
+      if (groupChat && !groupChat.participants.some((p) => p.equals(req.user.id))) {
+        groupChat.participants.push(req.user.id);
+        await groupChat.save();
+      }
+    } else {
+      groupChat = await Chat.create({
+        type: 'group',
+        projectId: project._id,
+        participants: [project.ownerId, req.user.id],
+        messages: []
+      });
+      project.groupChatId = groupChat._id;
+    }
+
+    if (ioInstance) {
+      await emitSystemMessage(
+        ioInstance,
+        groupChat._id,
+        req.user.id,
+        `${req.user.name || 'A collaborator'} has joined the project.`,
+        'invite_accepted'
+      );
+    }
+
+    if (collaborator.chatId && ioInstance) {
+      await emitSystemMessage(
+        ioInstance,
+        collaborator.chatId,
+        req.user.id,
+        'Invite accepted! A group chat has been created for this project.',
+        'invite_accepted'
+      );
+    }
+  } else {
+    collaborator.inviteStatus = 'declined';
+    collaborator.history.push({ event: 'declined' });
+
+    if (collaborator.chatId && ioInstance) {
+      await emitSystemMessage(
+        ioInstance,
+        collaborator.chatId,
+        req.user.id,
+        'Invite declined.',
+        'invite_declined'
+      );
+    }
+  }
+
+  await project.save();
+  res.json(project);
+});
+
+// @route POST /api/projects/:id/terms
+const proposeTerms = asyncHandler(async (req, res) => {
+  const { targetUserId, price, deliverables, dateConfirmed, notes } = req.body;
+  const project = await Project.findById(req.params.id);
+
+  if (!project) throw new AppError('Project not found', 404);
+  if (!project.ownerId.equals(req.user.id)) {
+    throw new AppError('Only the owner can propose terms', 403);
+  }
+
+  const collaborator = project.collaborators.find((c) => c.userId.equals(targetUserId));
+  if (!collaborator || collaborator.inviteStatus !== 'accepted') {
+    throw new AppError('Collaborator not found or not yet accepted', 404);
+  }
+
+  collaborator.proposedTerms = { price, deliverables, dateConfirmed, notes };
+  collaborator.termsStatus = 'pending';
+  collaborator.history.push({ event: 'terms_proposed' });
+
+  await project.save();
+
+  const targetChat = project.groupChatId || collaborator.chatId;
+  if (targetChat && ioInstance) {
+    await emitSystemMessage(
+      ioInstance,
+      targetChat,
+      req.user.id,
+      'New terms have been proposed. Please review and respond.',
+      'terms_proposed'
+    );
+  }
+
+  res.json(project);
+});
+
+// @route POST /api/projects/:id/terms/respond
+const respondToTerms = asyncHandler(async (req, res) => {
+  const { accept } = req.body;
+  const project = await Project.findById(req.params.id);
+
+  if (!project) throw new AppError('Project not found', 404);
+
+  const collaborator = project.collaborators.find((c) => c.userId.equals(req.user.id));
+  if (!collaborator || collaborator.termsStatus !== 'pending') {
+    throw new AppError('No pending terms to respond to', 400);
+  }
+
+  collaborator.termsStatus = accept ? 'accepted' : 'rejected';
+  collaborator.history.push({ event: accept ? 'terms_accepted' : 'terms_rejected' });
+  await project.save();
+
+  if (project.groupChatId && ioInstance) {
+    await emitSystemMessage(
+      ioInstance,
+      project.groupChatId,
+      req.user.id,
+      accept
+        ? `${req.user.name || 'A collaborator'} accepted the proposed terms.`
+        : `${req.user.name || 'A collaborator'} rejected the proposed terms.`,
+      accept ? 'terms_accepted' : null
+    );
+  }
+
+  const wasLocked = await checkAndLockProject(project);
+
+  res.json({ project, locked: wasLocked });
+});
+
+// @route POST /api/projects/:id/leave
+const leaveProject = asyncHandler(async (req, res) => {
+  const project = await Project.findById(req.params.id);
+  if (!project) throw new AppError('Project not found', 404);
+  if (['locked', 'in_progress'].includes(project.status)) {
+    throw new AppError('Cannot leave a locked or in-progress project', 400);
+  }
+
+  const collaborator = project.collaborators.find((c) => c.userId.equals(req.user.id));
+  if (!collaborator || collaborator.inviteStatus !== 'accepted') {
+    throw new AppError('You are not an active collaborator on this project', 404);
+  }
+
+  await removeCollaboratorInternal(project, collaborator, req.user.id, 'left');
+  res.json(project);
+});
+
+// @route POST /api/projects/:id/remove
+const removeCollaborator = asyncHandler(async (req, res) => {
+  const { targetUserId } = req.body;
+  const project = await Project.findById(req.params.id);
+  if (!project) throw new AppError('Project not found', 404);
+  if (!project.ownerId.equals(req.user.id)) {
+    throw new AppError('Only the owner can remove collaborators', 403);
+  }
+  if (['locked', 'in_progress'].includes(project.status)) {
+    throw new AppError('Cannot remove collaborators from a locked project', 400);
+  }
+
+  const collaborator = project.collaborators.find((c) => c.userId.equals(targetUserId));
+  if (!collaborator || collaborator.inviteStatus !== 'accepted') {
+    throw new AppError('Collaborator not found or not active', 404);
+  }
+
+  await removeCollaboratorInternal(project, collaborator, req.user.id, 'removed');
+  res.json(project);
+});
+
+// Shared logic for leave + remove — plain helper, not a route, so no asyncHandler needed;
+// errors thrown here propagate up to whichever asyncHandler-wrapped route called it.
+const removeCollaboratorInternal = async (project, collaborator, actingUserId, eventType) => {
+  collaborator.inviteStatus = eventType;
+  collaborator.termsStatus = 'rejected';
+  collaborator.history.push({ event: eventType });
+
+  if (project.groupChatId) {
+    const groupChat = await Chat.findById(project.groupChatId);
+
+    if (groupChat) {
+      groupChat.participants = groupChat.participants.filter((p) => !p.equals(collaborator.userId));
+
+      const remainingVendors = project.collaborators.filter(
+        (c) => c.inviteStatus === 'accepted' && !c.userId.equals(collaborator.userId)
+      );
+
+      if (remainingVendors.length === 0) {
+        await Chat.findByIdAndDelete(project.groupChatId);
+        project.groupChatId = null;
+      } else {
+        await groupChat.save();
+        if (ioInstance) {
+          await emitSystemMessage(
+            ioInstance,
+            groupChat._id,
+            actingUserId,
+            eventType === 'left' ? 'A collaborator has left the project.' : 'A collaborator was removed from the project.',
+            eventType === 'left' ? 'member_left' : 'member_removed'
+          );
+        }
+      }
+    }
+  }
+
+  const hasActiveCollaborators = project.collaborators.some((c) => c.inviteStatus === 'accepted');
+  if (!hasActiveCollaborators && project.status !== 'draft') {
+    project.status = 'building';
+  }
+
+  await project.save();
+};
+
+module.exports = {
+  setIo,
+  inviteCollaborator,
+  respondToInvite,
+  proposeTerms,
+  respondToTerms,
+  leaveProject,
+  removeCollaborator
+};
