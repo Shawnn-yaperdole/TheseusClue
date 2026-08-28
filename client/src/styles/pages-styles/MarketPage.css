@@ -1,0 +1,72 @@
+.market-filters {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.market-filters select,
+.market-filters input {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.market-filters input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.vendor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-5);
+}
+
+.vendor-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vendor-card:hover {
+  border-color: var(--brass);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(20, 23, 31, 0.06);
+}
+
+.vendor-card-category {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brass);
+  margin: 0 0 var(--space-2);
+}
+
+.vendor-card h3 {
+  font-size: 1.2rem;
+  margin-bottom: var(--space-2);
+}
+
+.vendor-card-location {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  margin-bottom: var(--space-3);
+}
+
+.vendor-card-price {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  color: var(--indigo);
+  margin-bottom: var(--space-4);
+}
+
+.vendor-card .btn-secondary {
+  width: 100%;
+  text-align: center;
+}

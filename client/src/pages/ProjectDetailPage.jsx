@@ -11,6 +11,11 @@ import {
 import { getOrCreateSingleChat } from '../api/chats';
 import { getVendors } from '../api/vendors';
 import { useAuthStore } from '../store/authStore';
+import AppShell from '../components/AppShell';
+import StatusBadge from '../components/StatusBadge';
+import LockSeal from '../components/LockSeal';
+import '../styles/pages-styles/ProjectDetailPage.css';
+import BackButton from '../components/BackButton';
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
@@ -18,12 +23,10 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const currentUser = useAuthStore((state) => state.user);
 
-  // Vendor search/picker state
   const [vendorSearch, setVendorSearch] = useState('');
   const [vendorResults, setVendorResults] = useState([]);
   const [showPicker, setShowPicker] = useState(false);
 
-  // Terms proposal form state (per collaborator, keyed by userId)
   const [termsForm, setTermsForm] = useState({ price: '', deliverables: '', dateConfirmed: '', notes: '' });
   const [activeTermsTarget, setActiveTermsTarget] = useState(null);
 
@@ -121,105 +124,144 @@ export default function ProjectDetailPage() {
     }
   };
 
-  if (loading) return <p>Loading project...</p>;
-  if (!project) return <p>Project not found</p>;
+  if (loading) return <AppShell><p className="muted">Loading project…</p></AppShell>;
+  if (!project) return <AppShell><p className="muted">Project not found.</p></AppShell>;
 
-  // Vendors already invited (any status) — used to hide them from search results so you can't double-invite via picker
   const alreadyInvitedIds = new Set(project.collaborators.map((c) => c.userId._id));
+  const acceptedCount = project.collaborators.filter((c) => c.inviteStatus === 'accepted').length;
 
   return (
-    <div>
-      <h1>{project.title}</h1>
-      <p>Status: <strong>{project.status}</strong></p>
-      <p>{project.description}</p>
-      <p>Budget: ${project.budget?.total || 0}</p>
+    <AppShell>
+      <BackButton fallback="/events" label="back to events" />
+      <div className="project-header">
+        <div>
+          <div className="project-header-title-row">
+            <h1>{project.title}</h1>
+            {project.status === 'locked' && <LockSeal size={30} />}
+          </div>
+          {project.description && <p className="project-description">{project.description}</p>}
+        </div>
+      </div>
 
-      <h2>Collaborators</h2>
-      {project.collaborators.length === 0 && <p>No collaborators yet.</p>}
-      <ul>
-        {project.collaborators.map((c) => (
-          <li key={c.userId._id}>
-            {c.userId.name} — {c.vendorCategory} — invite: <strong>{c.inviteStatus}</strong>, terms: <strong>{c.termsStatus}</strong>
+      <div className="project-layout">
+        {/* Main column */}
+        <div>
+          <div className="panel">
+            <p className="panel-title">Budget</p>
+            <div className="budget-figure">${(project.budget?.total || 0).toLocaleString()}</div>
+          </div>
 
-            {isOwner && c.inviteStatus === 'accepted' && c.termsStatus !== 'accepted' && (
-              <div style={{ marginTop: '4px' }}>
-                {activeTermsTarget === c.userId._id ? (
-                  <div>
-                    <input placeholder="Price" value={termsForm.price} onChange={(e) => setTermsForm({ ...termsForm, price: e.target.value })} />
-                    <input placeholder="Deliverables" value={termsForm.deliverables} onChange={(e) => setTermsForm({ ...termsForm, deliverables: e.target.value })} />
-                    <input type="date" value={termsForm.dateConfirmed} onChange={(e) => setTermsForm({ ...termsForm, dateConfirmed: e.target.value })} />
-                    <button onClick={() => handleProposeTerms(c.userId._id)}>Submit Terms</button>
-                    <button onClick={() => setActiveTermsTarget(null)}>Cancel</button>
+          <div className="panel">
+            <p className="panel-title">Collaborators</p>
+            {project.collaborators.length === 0 ? (
+              <p className="muted">No collaborators yet — invite one from the sidebar.</p>
+            ) : (
+              project.collaborators.map((c) => (
+                <div className="collaborator-row" key={c.userId._id}>
+                  <div className="collaborator-info">
+                    <span className="collaborator-name">{c.userId.name}</span>
+                    <span className="collaborator-category">{c.vendorCategory}</span>
                   </div>
-                ) : (
-                  <button onClick={() => setActiveTermsTarget(c.userId._id)}>Propose Terms</button>
-                )}
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {/* Owner: invite a collaborator via vendor picker */}
-      {isOwner && project.status !== 'locked' && (
-        <div style={{ marginTop: '16px', border: '1px solid #ccc', padding: '12px' }}>
-          <h3>Invite a Collaborator</h3>
-
-          {!showPicker ? (
-            <button onClick={() => setShowPicker(true)}>+ Find a Vendor to Invite</button>
-          ) : (
-            <div>
-              <form onSubmit={handleVendorSearch}>
-                <input
-                  placeholder="Search vendors by name"
-                  value={vendorSearch}
-                  onChange={(e) => setVendorSearch(e.target.value)}
-                />
-                <button type="submit">Search</button>
-                <button type="button" onClick={() => { setShowPicker(false); setVendorResults([]); }}>Cancel</button>
-              </form>
-
-              <ul>
-                {vendorResults.length === 0 && <li>No results yet — try searching.</li>}
-                {vendorResults.map((v) => (
-                  <li key={v._id}>
-                    <strong>{v.businessName}</strong> ({v.category}) — {v.userId.name}
-                    {alreadyInvitedIds.has(v.userId._id) ? (
-                      <span> — already invited</span>
+                  <div className="collaborator-statuses">
+                    {c.inviteStatus !== 'accepted' ? (
+                      <StatusBadge status={c.inviteStatus} />
                     ) : (
-                      <button onClick={() => handleInvite(v)}>Invite</button>
+                      <StatusBadge status={c.termsStatus} />
                     )}
-                  </li>
-                ))}
-              </ul>
+                  </div>
+
+                  {isOwner && c.inviteStatus === 'accepted' && c.termsStatus !== 'accepted' && (
+                    <>
+                      {activeTermsTarget === c.userId._id ? (
+                        <div className="terms-form">
+                          <input placeholder="Price (USD)" value={termsForm.price} onChange={(e) => setTermsForm({ ...termsForm, price: e.target.value })} />
+                          <input placeholder="Deliverables" value={termsForm.deliverables} onChange={(e) => setTermsForm({ ...termsForm, deliverables: e.target.value })} />
+                          <input type="date" value={termsForm.dateConfirmed} onChange={(e) => setTermsForm({ ...termsForm, dateConfirmed: e.target.value })} />
+                          <div className="terms-form-actions">
+                            <button className="btn-small btn-accept" onClick={() => handleProposeTerms(c.userId._id)}>Submit terms</button>
+                            <button className="btn-small btn-decline" onClick={() => setActiveTermsTarget(null)}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="btn-secondary" onClick={() => setActiveTermsTarget(c.userId._id)}>Propose terms</button>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className="sidebar">
+          <div className="sidebar-status-panel">
+            <p className="sidebar-status-label">Status</p>
+            {project.status === 'locked' && (
+              <div className="sidebar-seal-wrap"><LockSeal size={48} /></div>
+            )}
+            <StatusBadge status={project.status} />
+            <p className="muted" style={{ color: 'rgba(247,244,236,0.7)', marginTop: 'var(--space-3)', fontSize: '0.8rem' }}>
+              {acceptedCount} collaborator{acceptedCount !== 1 ? 's' : ''} on board
+            </p>
+          </div>
+
+          {myCollaboratorEntry?.inviteStatus === 'pending' && (
+            <div className="action-card invite-pending">
+              <p>You've been invited to join as <strong>{myCollaboratorEntry.vendorCategory}</strong>.</p>
+              <div className="btn-row">
+                <button className="btn-small btn-accept" onClick={() => handleInviteResponse(true)}>Accept</button>
+                <button className="btn-small btn-decline" onClick={() => handleInviteResponse(false)}>Decline</button>
+              </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Collaborator responding to a pending invite */}
-      {myCollaboratorEntry?.inviteStatus === 'pending' && (
-        <div style={{ marginTop: '16px', border: '1px solid orange', padding: '12px' }}>
-          <p>You've been invited to join this project as {myCollaboratorEntry.vendorCategory}.</p>
-          <button onClick={() => handleInviteResponse(true)}>Accept</button>
-          <button onClick={() => handleInviteResponse(false)}>Decline</button>
-        </div>
-      )}
+          {myCollaboratorEntry?.termsStatus === 'pending' && (
+            <div className="action-card terms-pending">
+              <p>New terms have been proposed:</p>
+              <pre>{JSON.stringify(myCollaboratorEntry.proposedTerms, null, 2)}</pre>
+              <div className="btn-row">
+                <button className="btn-small btn-accept" onClick={() => handleTermsResponse(true)}>Accept terms</button>
+                <button className="btn-small btn-decline" onClick={() => handleTermsResponse(false)}>Reject</button>
+              </div>
+            </div>
+          )}
 
-      {/* Collaborator responding to proposed terms */}
-      {myCollaboratorEntry?.termsStatus === 'pending' && (
-        <div style={{ marginTop: '16px', border: '1px solid blue', padding: '12px' }}>
-          <p>New terms have been proposed:</p>
-          <pre>{JSON.stringify(myCollaboratorEntry.proposedTerms, null, 2)}</pre>
-          <button onClick={() => handleTermsResponse(true)}>Accept Terms</button>
-          <button onClick={() => handleTermsResponse(false)}>Reject Terms</button>
-        </div>
-      )}
+          {isOwner && project.status !== 'locked' && (
+            <div className="action-card">
+              <p style={{ fontWeight: 600 }}>Build your team</p>
+              {!showPicker ? (
+                <button className="btn-secondary" onClick={() => setShowPicker(true)}>+ Find a vendor</button>
+              ) : (
+                <div className="vendor-picker">
+                  <form className="vendor-search-row" onSubmit={handleVendorSearch}>
+                    <input
+                      placeholder="Search by business name"
+                      value={vendorSearch}
+                      onChange={(e) => setVendorSearch(e.target.value)}
+                    />
+                    <button type="submit" className="btn-small btn-accept">Go</button>
+                  </form>
+                  {vendorResults.map((v) => (
+                    <div className="vendor-result-row" key={v._id}>
+                      <span><strong>{v.businessName}</strong> — {v.category}</span>
+                      {alreadyInvitedIds.has(v.userId._id) ? (
+                        <span className="already-invited-tag">Invited</span>
+                      ) : (
+                        <button className="btn-small btn-accept" onClick={() => handleInvite(v)}>Invite</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-      {/* Leave option for active collaborators, pre-lock only */}
-      {myCollaboratorEntry?.inviteStatus === 'accepted' && project.status !== 'locked' && (
-        <button onClick={handleLeave} style={{ marginTop: '16px' }}>Leave Project</button>
-      )}
-    </div>
+          {myCollaboratorEntry?.inviteStatus === 'accepted' && project.status !== 'locked' && (
+            <button className="btn-danger-ghost" onClick={handleLeave}>Leave this project</button>
+          )}
+        </div>
+      </div>
+    </AppShell>
   );
 }

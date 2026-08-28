@@ -1,0 +1,42 @@
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.status-neutral {
+  color: var(--ink-soft);
+  background: rgba(20, 23, 31, 0.06);
+  border-color: var(--line);
+}
+
+.status-brass {
+  color: #8A6A3D;
+  background: rgba(176, 141, 87, 0.12);
+  border-color: rgba(176, 141, 87, 0.3);
+}
+
+.status-moss {
+  color: var(--moss);
+  background: rgba(95, 114, 89, 0.1);
+  border-color: rgba(95, 114, 89, 0.28);
+}
+
+.status-indigo {
+  color: var(--indigo);
+  background: rgba(51, 62, 107, 0.08);
+  border-color: rgba(51, 62, 107, 0.25);
+}
+
+.status-brick {
+  color: var(--brick);
+  background: rgba(168, 70, 47, 0.08);
+  border-color: rgba(168, 70, 47, 0.25);
+}

@@ -12,6 +12,7 @@ const { initChatSocket } = require('./sockets/chatSocket');
 const collaboratorRoutes = require('./routes/collaboratorRoutes');
 const { setIo } = require('./controllers/collaboratorController');
 const { errorHandler } = require('./middleware/errorHandler');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 
 connectDB();
@@ -24,6 +25,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/projects', collaboratorRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/chats', chatRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));

@@ -1,0 +1,118 @@
+.notif-wrap {
+  position: relative;
+}
+
+.notif-bell {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--line-on-ink);
+  color: var(--paper);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+}
+
+.notif-bell:hover {
+  border-color: var(--brass);
+}
+
+.notif-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--brick);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 340px;
+  max-height: 420px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 32px rgba(20, 23, 31, 0.14);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.notif-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.notif-mark-all {
+  background: transparent;
+  border: none;
+  color: var(--indigo);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.notif-mark-all:hover {
+  text-decoration: underline;
+}
+
+.notif-list {
+  overflow-y: auto;
+}
+
+.notif-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.notif-item:hover {
+  background: var(--paper-dim);
+}
+
+.notif-item.unread {
+  color: var(--ink);
+  font-weight: 500;
+  background: rgba(51, 62, 107, 0.04);
+}
+
+.notif-item.unread::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--indigo);
+  margin-right: var(--space-2);
+}
+
+.notif-empty {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { registerUser } from '../api/auth';
 import { useAuthStore } from '../store/authStore';
+import AuthLayout from '../components/AuthLayout';
+import '../styles/pages-styles/AuthForm.css';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -36,9 +38,6 @@ export default function RegisterPage() {
       });
 
       setAuth(res.data.user, res.data.token);
-
-      // If they registered as a vendor, send them to complete their vendor profile
-      // (built in Phase 5). Otherwise straight to the Event Page.
       navigate(form.isVendor ? '/vendor/setup' : '/events');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');
@@ -48,35 +47,49 @@ export default function RegisterPage() {
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: '0 auto' }}>
-      <h1>Register</h1>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Name</label>
-          <input name="name" value={form.name} onChange={handleChange} required />
-        </div>
-        <div>
-          <label>Email</label>
-          <input type="email" name="email" value={form.email} onChange={handleChange} required />
-        </div>
-        <div>
-          <label>Password</label>
-          <input type="password" name="password" value={form.password} onChange={handleChange} required minLength={6} />
-        </div>
-        <div>
-          <label>
-            <input type="checkbox" name="isVendor" checked={form.isVendor} onChange={handleChange} />
-            I'm also offering services as a vendor (venue, photography, catering, etc.)
-          </label>
-        </div>
-        <button type="submit" disabled={loading}>
-          {loading ? 'Creating account...' : 'Register'}
+    <AuthLayout tagline="One plan. Every party. One signature.">
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <h2 className="auth-form-title">Create your account</h2>
+        <p className="auth-form-subtitle">Plan an event, or offer your services to planners.</p>
+
+        {error && <div className="auth-error" role="alert">{error}</div>}
+
+        <label className="field">
+          <span className="field-label">Name</span>
+          <input name="name" value={form.name} onChange={handleChange} required autoComplete="name" />
+        </label>
+
+        <label className="field">
+          <span className="field-label">Email</span>
+          <input type="email" name="email" value={form.email} onChange={handleChange} required autoComplete="email" />
+        </label>
+
+        <label className="field">
+          <span className="field-label">Password</span>
+          <input
+            type="password"
+            name="password"
+            value={form.password}
+            onChange={handleChange}
+            required
+            minLength={6}
+            autoComplete="new-password"
+          />
+        </label>
+
+        <label className="field-checkbox">
+          <input type="checkbox" name="isVendor" checked={form.isVendor} onChange={handleChange} />
+          <span>I also offer services as a vendor — venue, photography, catering, and similar</span>
+        </label>
+
+        <button type="submit" className="btn-primary" disabled={loading}>
+          {loading ? 'Creating account…' : 'Create account'}
         </button>
+
+        <p className="auth-switch">
+          Already have an account? <Link to="/login">Log in</Link>
+        </p>
       </form>
-      <p>
-        Already have an account? <Link to="/login">Log in</Link>
-      </p>
-    </div>
+    </AuthLayout>
   );
 }

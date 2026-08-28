@@ -1,0 +1,107 @@
+.auth-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.auth-brand {
+  position: relative;
+  flex: 1;
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.auth-brand-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  color: var(--paper);
+  padding: var(--space-6);
+}
+
+.auth-brand-title {
+  color: var(--paper);
+  font-size: 2.5rem;
+  margin-top: var(--space-4);
+  letter-spacing: 0.01em;
+}
+
+.auth-brand-tagline {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brass-soft);
+  margin-top: var(--space-3);
+}
+
+/* Signature motif: separate rings converging toward center — echoes
+   multiple parties (planner + vendors) coming into one agreement */
+.auth-rings {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.ring {
+  position: absolute;
+  border: 1px solid var(--line-on-ink);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+}
+
+.ring-1 {
+  width: 340px;
+  height: 340px;
+  margin: -170px 0 0 -170px;
+  animation: converge 8s ease-in-out infinite;
+}
+
+.ring-2 {
+  width: 480px;
+  height: 480px;
+  margin: -240px 0 0 -240px;
+  animation: converge 8s ease-in-out infinite 0.6s;
+}
+
+.ring-3 {
+  width: 620px;
+  height: 620px;
+  margin: -310px 0 0 -310px;
+  animation: converge 8s ease-in-out infinite 1.2s;
+}
+
+@keyframes converge {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(0.94); opacity: 0.9; }
+}
+
+.auth-form-panel {
+  flex: 1;
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+}
+
+.auth-form-wrap {
+  width: 100%;
+  max-width: 380px;
+}
+
+@media (max-width: 860px) {
+  .auth-layout {
+    flex-direction: column;
+  }
+  .auth-brand {
+    min-height: 220px;
+    flex: none;
+  }
+  .auth-brand-title {
+    font-size: 1.8rem;
+  }
+}

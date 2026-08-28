@@ -1,0 +1,13 @@
+.seal-animated circle {
+  transform-origin: center;
+  animation: seal-breathe 4s ease-in-out infinite;
+}
+
+.seal-animated circle:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+@keyframes seal-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}

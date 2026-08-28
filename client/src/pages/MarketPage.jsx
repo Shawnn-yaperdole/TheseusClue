@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { getVendors } from '../api/vendors';
 import { useNavigate } from 'react-router-dom';
+import { getVendors } from '../api/vendors';
 import { getOrCreateSingleChat } from '../api/chats';
+import AppShell from '../components/AppShell';
+import '../styles/pages-styles/MarketPage.css';
 
 export default function MarketPage() {
   const [vendors, setVendors] = useState([]);
@@ -9,18 +11,12 @@ export default function MarketPage() {
   const [filters, setFilters] = useState({ category: '', search: '' });
   const navigate = useNavigate();
 
-  const handleContact = async (vendorUserId) => {
-  const res = await getOrCreateSingleChat(vendorUserId);
-  navigate(`/chat?chatId=${res.data._id}`);
-  };
-
   const fetchVendors = async () => {
     setLoading(true);
     try {
       const params = {};
       if (filters.category) params.category = filters.category;
       if (filters.search) params.search = filters.search;
-
       const res = await getVendors(params);
       setVendors(res.data);
     } catch (err) {
@@ -44,13 +40,23 @@ export default function MarketPage() {
     fetchVendors();
   };
 
-  return (
-    <div>
-      <h1>Find Vendors</h1>
+  const handleContact = async (vendorUserId) => {
+    const res = await getOrCreateSingleChat(vendorUserId);
+    navigate(`/chat?chatId=${res.data._id}`);
+  };
 
-      <form onSubmit={handleSearch}>
+  return (
+    <AppShell>
+      <div className="page-header">
+        <div>
+          <p className="page-eyebrow">Find your team</p>
+          <h1 className="page-title">Market</h1>
+        </div>
+      </div>
+
+      <form className="market-filters" onSubmit={handleSearch}>
         <select name="category" value={filters.category} onChange={handleFilterChange}>
-          <option value="">All Categories</option>
+          <option value="">All categories</option>
           <option value="venue">Venue</option>
           <option value="photographer">Photographer</option>
           <option value="caterer">Caterer</option>
@@ -64,24 +70,33 @@ export default function MarketPage() {
           value={filters.search}
           onChange={handleFilterChange}
         />
-        <button type="submit">Search</button>
+        <button type="submit" className="btn-secondary">Search</button>
       </form>
 
       {loading ? (
-        <p>Loading vendors...</p>
+        <p className="muted">Loading vendors…</p>
+      ) : vendors.length === 0 ? (
+        <div className="empty-state">
+          <p>No vendors match this search.</p>
+          <p className="muted">Try a different category or clear the search.</p>
+        </div>
       ) : (
-        <ul>
+        <div className="vendor-grid">
           {vendors.map((v) => (
-            <li key={v._id}>
-              <strong>{v.businessName}</strong> ({v.category}) — {v.location || 'Location not specified'}
-              <br />
-              Price range: ${v.priceRange?.min || 0} - ${v.priceRange?.max || 0}
-              <br />
-              <button onClick={() => handleContact(v.userId._id)}>Contact</button>
-            </li>
+            <div className="vendor-card" key={v._id}>
+              <p className="vendor-card-category">{v.category}</p>
+              <h3>{v.businessName}</h3>
+              <p className="vendor-card-location">{v.location || 'Location not specified'}</p>
+              <p className="vendor-card-price">
+                ${v.priceRange?.min || 0}–${v.priceRange?.max || 0}
+              </p>
+              <button className="btn-secondary" onClick={() => handleContact(v.userId._id)}>
+                Contact
+              </button>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </div>
+    </AppShell>
   );
 }

@@ -2,6 +2,7 @@ const Project = require('../models/Project');
 const Chat = require('../models/Chat');
 const { emitSystemMessage } = require('../sockets/chatSocket');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
+const { notify } = require('../services/notificationService');
 
 let ioInstance = null;
 const setIo = (io) => { ioInstance = io; };
@@ -27,6 +28,17 @@ const checkAndLockProject = async (project) => {
         'All parties have accepted the terms. The event plan is now locked in!',
         'project_locked'
       );
+    }
+    if (ioInstance) {
+      const recipientIds = [project.ownerId, ...activeCollaborators.map((c) => c.userId)];
+      for (const recipientId of recipientIds) {
+        await notify(ioInstance, recipientId, {
+          type: 'project_locked',
+          message: `"${project.title}" is now locked in — all parties have agreed.`,
+          link: `/events/${project._id}`,
+          projectId: project._id
+        });
+      }
     }
     return true;
   }
@@ -81,6 +93,15 @@ const inviteCollaborator = asyncHandler(async (req, res) => {
     );
   }
 
+  if (ioInstance) {
+    await notify(ioInstance, targetUserId, {
+      type: 'invite_received',
+      message: `You've been invited to "${project.title}" as ${vendorCategory}.`,
+      link: `/events/${project._id}`,
+      projectId: project._id
+    });
+  }
+
   res.status(200).json(project);
 });
 
@@ -88,20 +109,20 @@ const inviteCollaborator = asyncHandler(async (req, res) => {
 const respondToInvite = asyncHandler(async (req, res) => {
   const { accept } = req.body;
   const project = await Project.findById(req.params.id);
-
+  
   if (!project) throw new AppError('Project not found', 404);
-
+  
   const collaborator = project.collaborators.find((c) => c.userId.equals(req.user.id));
   if (!collaborator) throw new AppError('You were not invited to this project', 404);
   if (collaborator.inviteStatus !== 'pending') {
     throw new AppError('This invite is no longer pending', 400);
   }
-
+  
   if (accept) {
     collaborator.inviteStatus = 'accepted';
     collaborator.termsStatus = 'pending';
     collaborator.history.push({ event: 'accepted' });
-
+    
     let groupChat;
     if (project.groupChatId) {
       groupChat = await Chat.findById(project.groupChatId);
@@ -109,6 +130,7 @@ const respondToInvite = asyncHandler(async (req, res) => {
         groupChat.participants.push(req.user.id);
         await groupChat.save();
       }
+    
     } else {
       groupChat = await Chat.create({
         type: 'group',
@@ -118,7 +140,7 @@ const respondToInvite = asyncHandler(async (req, res) => {
       });
       project.groupChatId = groupChat._id;
     }
-
+    
     if (ioInstance) {
       await emitSystemMessage(
         ioInstance,
@@ -128,7 +150,7 @@ const respondToInvite = asyncHandler(async (req, res) => {
         'invite_accepted'
       );
     }
-
+    
     if (collaborator.chatId && ioInstance) {
       await emitSystemMessage(
         ioInstance,
@@ -138,10 +160,20 @@ const respondToInvite = asyncHandler(async (req, res) => {
         'invite_accepted'
       );
     }
+
+    if (ioInstance) {
+      await notify(ioInstance, project.ownerId, {
+        type: 'invite_accepted',
+        message: `${req.user.name} accepted your invite for "${project.title}".`,
+        link: `/events/${project._id}`,
+        projectId: project._id
+      });
+    }
+  
   } else {
     collaborator.inviteStatus = 'declined';
     collaborator.history.push({ event: 'declined' });
-
+    
     if (collaborator.chatId && ioInstance) {
       await emitSystemMessage(
         ioInstance,
@@ -151,8 +183,17 @@ const respondToInvite = asyncHandler(async (req, res) => {
         'invite_declined'
       );
     }
-  }
 
+    if (ioInstance) {
+      await notify(ioInstance, project.ownerId, {
+        type: 'invite_declined',
+        message: `${req.user.name} declined your invite for "${project.title}".`,
+        link: `/events/${project._id}`,
+        projectId: project._id
+      });
+    }
+  }
+  
   await project.save();
   res.json(project);
 });
@@ -189,6 +230,15 @@ const proposeTerms = asyncHandler(async (req, res) => {
     );
   }
 
+  if (ioInstance) {
+    await notify(ioInstance, targetUserId, {
+      type: 'terms_proposed',
+      message: `New terms proposed for "${project.title}". Please review.`,
+      link: `/events/${project._id}`,
+      projectId: project._id
+    });
+  }
+
   res.json(project);
 });
 
@@ -221,6 +271,17 @@ const respondToTerms = asyncHandler(async (req, res) => {
   }
 
   const wasLocked = await checkAndLockProject(project);
+
+  if (ioInstance) {
+    await notify(ioInstance, project.ownerId, {
+      type: accept ? 'terms_accepted' : 'terms_rejected',
+      message: accept
+        ? `${req.user.name} accepted the terms for "${project.title}".`
+        : `${req.user.name} rejected the terms for "${project.title}".`,
+      link: `/events/${project._id}`,
+      projectId: project._id
+    });
+  }
 
   res.json({ project, locked: wasLocked });
 });
@@ -304,6 +365,24 @@ const removeCollaboratorInternal = async (project, collaborator, actingUserId, e
   }
 
   await project.save();
+
+  if (ioInstance) {
+    if (eventType === 'left') {
+      await notify(ioInstance, project.ownerId, {
+        type: 'collaborator_left',
+        message: `A collaborator has left "${project.title}".`,
+        link: `/events/${project._id}`,
+        projectId: project._id
+      });
+    } else {
+      await notify(ioInstance, collaborator.userId, {
+        type: 'collaborator_removed',
+        message: `You were removed from "${project.title}".`,
+        link: `/events/${project._id}`,
+        projectId: project._id
+      });
+    }
+  }
 };
 
 module.exports = {

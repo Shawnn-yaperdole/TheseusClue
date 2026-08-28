@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getMyChats } from '../api/chats';
 import ChatWindow from '../components/ChatWindow';
+import AppShell from '../components/AppShell';
+import '../styles/pages-styles/ChatPage.css';
+import BackButton from '../components/BackButton';
 
 export default function ChatPage() {
   const [chats, setChats] = useState({ single: [], group: [] });
@@ -17,7 +20,6 @@ export default function ChatPage() {
     fetchChats();
   }, []);
 
-  // Allow deep-linking to a specific chat, e.g. /chat?chatId=xyz (used by the Market Page "Contact" button in Phase 5/7)
   useEffect(() => {
     const chatIdParam = searchParams.get('chatId');
     if (chatIdParam) setSelectedChatId(chatIdParam);
@@ -26,39 +28,52 @@ export default function ChatPage() {
   const currentList = chats[activeTab];
 
   return (
-    <div style={{ display: 'flex', gap: '16px' }}>
-      <div style={{ width: '250px' }}>
-        <h2>Chats</h2>
+    <AppShell>
+      <BackButton fallback="/market" label="Back" />
+      <div className="page-header">
         <div>
-          <button onClick={() => setActiveTab('single')} disabled={activeTab === 'single'}>
-            Single Chats
-          </button>
-          <button onClick={() => setActiveTab('group')} disabled={activeTab === 'group'}>
-            Group Chats
-          </button>
+          <p className="page-eyebrow">Conversations</p>
+          <h1 className="page-title">Chat</h1>
         </div>
-
-        <ul>
-          {currentList.length === 0 && <li>No chats yet</li>}
-          {currentList.map((c) => (
-            <li key={c._id}>
-              <button onClick={() => setSelectedChatId(c._id)}>
-                {c.type === 'group'
-                  ? c.projectId?.title || 'Project Chat'
-                  : c.participants.map((p) => p.name).join(', ')}
-              </button>
-            </li>
-          ))}
-        </ul>
       </div>
 
-      <div style={{ flex: 1 }}>
+      <div className="chat-layout">
+        <div className="chat-sidebar">
+          <div className="chat-tabs">
+            <button className={activeTab === 'single' ? 'chat-tab active' : 'chat-tab'} onClick={() => setActiveTab('single')}>
+              Single
+            </button>
+            <button className={activeTab === 'group' ? 'chat-tab active' : 'chat-tab'} onClick={() => setActiveTab('group')}>
+              Group
+            </button>
+          </div>
+          <div className="chat-list">
+            {currentList.length === 0 ? (
+              <p className="chat-list-empty">No conversations yet.</p>
+            ) : (
+              currentList.map((c) => (
+                <button
+                  key={c._id}
+                  className={selectedChatId === c._id ? 'chat-list-item active' : 'chat-list-item'}
+                  onClick={() => setSelectedChatId(c._id)}
+                >
+                  {c.type === 'group'
+                    ? c.projectId?.title || 'Project chat'
+                    : c.participants.map((p) => p.name).join(', ')}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
         {selectedChatId ? (
           <ChatWindow chatId={selectedChatId} />
         ) : (
-          <p>Select a chat to start messaging</p>
+          <div className="chat-window">
+            <div className="chat-empty-state">Select a conversation to start messaging.</div>
+          </div>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }

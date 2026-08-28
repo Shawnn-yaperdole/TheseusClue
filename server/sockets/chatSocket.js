@@ -20,6 +20,7 @@ const initChatSocket = (io) => {
   io.on('connection', (socket) => {
     console.log(`User ${socket.userId} connected (socket ${socket.id})`);
 
+    socket.join(socket.userId);
     // Client joins a chat "room" when they open that chat in the UI
     socket.on('join_chat', async (chatId) => {
       try {
