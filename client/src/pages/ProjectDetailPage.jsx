@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { getProjectById } from '../api/projects';
 import {
   inviteCollaborator,
@@ -16,6 +16,7 @@ import StatusBadge from '../components/StatusBadge';
 import LockSeal from '../components/LockSeal';
 import '../styles/pages-styles/ProjectDetailPage.css';
 import BackButton from '../components/BackButton';
+import { getCategoryLabel } from '../constants/vendorCategories';
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
@@ -62,6 +63,10 @@ export default function ProjectDetailPage() {
   const handleInvite = async (vendor) => {
     try {
       const chatRes = await getOrCreateSingleChat(vendor.userId._id);
+      const vendorCategoryLabel = vendor.category === 'other'
+      ? (vendor.customCategoryLabel || 'Other')
+      : getCategoryLabel(vendor.category);
+      
       await inviteCollaborator(id, {
         targetUserId: vendor.userId._id,
         vendorCategory: vendor.category,
@@ -159,7 +164,11 @@ export default function ProjectDetailPage() {
               project.collaborators.map((c) => (
                 <div className="collaborator-row" key={c.userId._id}>
                   <div className="collaborator-info">
-                    <span className="collaborator-name">{c.userId.name}</span>
+                    <span className="collaborator-name">
+                      <Link to={`/profile/${c.userId._id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                        {c.userId.name}
+                      </Link>
+                    </span>
                     <span className="collaborator-category">{c.vendorCategory}</span>
                   </div>
                   <div className="collaborator-statuses">

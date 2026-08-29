@@ -9,6 +9,8 @@ import MarketPage from './pages/MarketPage';
 import VendorSetupPage from './pages/VendorSetupPage';
 import ChatPage from './pages/ChatPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
+import ProfilePage from './pages/ProfilePage';
+import PublicProfilePage from './pages/PublicProfilePage';
 
 function App() {
   const initAuth = useAuthStore((state) => state.initAuth);
@@ -62,6 +64,22 @@ function App() {
               <ProjectDetailPage />
             </ProtectedRoute>
           }
+        />
+        <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        }
+        />
+        <Route
+        path="/profile/:id"
+        element={
+          <ProtectedRoute>
+            <PublicProfilePage />
+          </ProtectedRoute>
+        }
         />
       </Routes>
     </BrowserRouter>

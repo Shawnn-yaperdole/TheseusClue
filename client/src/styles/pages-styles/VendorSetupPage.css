@@ -1,0 +1,65 @@
+.vendor-setup-page {
+  min-height: 100vh;
+  background: var(--paper);
+  padding: var(--space-7) var(--space-6);
+}
+
+.vendor-setup-wrap {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.vendor-setup-form .panel {
+  margin-bottom: var(--space-5);
+}
+
+.category-hint {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  background: var(--paper-dim);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  margin: -8px 0 var(--space-4);
+}
+
+.field select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  background: #fff;
+  color: var(--ink);
+}
+
+.field select:focus {
+  border-color: var(--indigo);
+}
+
+.rate-toggle {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.rate-toggle-btn {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.rate-toggle-btn.active {
+  border-color: var(--indigo);
+  background: rgba(51, 62, 107, 0.06);
+  color: var(--indigo);
+}
+
+@media (max-width: 600px) {
+  .vendor-setup-page {
+    padding: var(--space-5) var(--space-4);
+  }
+}

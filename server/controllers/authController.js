@@ -79,6 +79,8 @@ const getMe = asyncHandler(async (req, res) => {
     name: user.name,
     email: user.email,
     roles: user.roles,
+    organizationName: user.organizationName,
+    customFields: user.customFields,
     vendorProfile: user.vendorProfile,
     avatarUrl: user.avatarUrl
   });

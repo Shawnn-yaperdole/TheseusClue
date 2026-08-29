@@ -3,8 +3,9 @@ import { getChatById } from '../api/chats';
 import { getSocket } from '../socket';
 import { useAuthStore } from '../store/authStore';
 import '../styles/pages-styles/ChatPage.css';
+import { Link } from 'react-router-dom';
 
-export default function ChatWindow({ chatId }) {
+export default function ChatWindow({ chatId, onBack }) {
   const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -54,9 +55,18 @@ export default function ChatWindow({ chatId }) {
   return (
     <div className="chat-window">
       <div className="chat-window-header">
-        {chat.type === 'group'
-          ? `Group: ${chat.projectId?.title || 'Project chat'}`
-          : chat.participants.find((p) => p._id !== currentUser.id)?.name || 'Chat'}
+        {onBack && (
+          <button className="chat-back-mobile" onClick={onBack} aria-label="Back to conversations">
+            ←  
+          </button>
+        )}
+        {chat.type === 'group' ? (
+            `Group: ${chat.projectId?.title || 'Project chat'}`
+          ) : (
+            <Link to={`/profile/${chat.participants.find((p) => p._id !== currentUser.id)?._id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+            {chat.participants.find((p) => p._id !== currentUser.id)?.name || 'Chat'}
+            </Link>
+          )}
       </div>
 
       <div className="chat-window-messages">

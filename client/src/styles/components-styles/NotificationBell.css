@@ -38,7 +38,7 @@
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  width: 340px;
+  width: min(340px, 90vw);
   max-height: 420px;
   background: #fff;
   border: 1px solid var(--line);

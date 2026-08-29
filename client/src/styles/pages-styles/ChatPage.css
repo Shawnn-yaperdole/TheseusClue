@@ -144,3 +144,39 @@
   color: var(--ink-soft);
   font-size: 0.9rem;
 }
+
+.chat-back-mobile {
+  display: none;
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  margin-right: var(--space-2);
+  color: var(--ink);
+}
+
+@media (max-width: 760px) {
+  .chat-layout {
+    grid-template-columns: 1fr;
+    height: calc(100vh - 220px);
+  }
+
+  .chat-layout .chat-sidebar {
+    display: flex;
+  }
+
+  .chat-layout .chat-window {
+    display: none;
+  }
+
+  .chat-layout.has-selection .chat-sidebar {
+    display: none;
+  }
+
+  .chat-layout.has-selection .chat-window {
+    display: flex;
+  }
+
+  .chat-back-mobile {
+    display: inline-block;
+  }
+}

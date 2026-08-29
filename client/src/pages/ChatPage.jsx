@@ -37,7 +37,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="chat-layout">
+      <div className={selectedChatId ? 'chat-layout has-selection' : 'chat-layout'}>
         <div className="chat-sidebar">
           <div className="chat-tabs">
             <button className={activeTab === 'single' ? 'chat-tab active' : 'chat-tab'} onClick={() => setActiveTab('single')}>
@@ -67,7 +67,7 @@ export default function ChatPage() {
         </div>
 
         {selectedChatId ? (
-          <ChatWindow chatId={selectedChatId} />
+          <ChatWindow chatId={selectedChatId} onBack={() => setSelectedChatId(null)} />
         ) : (
           <div className="chat-window">
             <div className="chat-empty-state">Select a conversation to start messaging.</div>

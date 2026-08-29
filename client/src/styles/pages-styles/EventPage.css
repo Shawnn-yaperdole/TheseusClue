@@ -109,3 +109,19 @@
   font-size: 0.75rem;
   color: var(--ink-soft);
 }
+
+@media (max-width: 600px) {
+  .new-event-bar {
+    flex-direction: column;
+  }
+
+  .new-event-bar .btn-primary {
+    width: 100%;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+}

@@ -12,15 +12,13 @@ const {
 } = require('../controllers/collaboratorController');
 const { protect } = require('../middleware/auth');
 
-const validCategories = ['venue', 'photographer', 'caterer', 'decorator', 'entertainment', 'other'];
-
 router.post(
   '/:id/invite',
   protect,
   [
     param('id').isMongoId().withMessage('Invalid project ID'),
     body('targetUserId').isMongoId().withMessage('Valid targetUserId is required'),
-    body('vendorCategory').isIn(validCategories).withMessage('Invalid vendor category'),
+    body('vendorCategory').trim().notEmpty().withMessage('Vendor category is required'),
     body('chatId').optional().isMongoId().withMessage('Invalid chat ID')
   ],
   validate,

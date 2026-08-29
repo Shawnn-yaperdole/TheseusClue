@@ -11,20 +11,23 @@ const {
 } = require('../controllers/vendorController');
 const { protect } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roleCheck');
-
-const validCategories = ['venue', 'photographer', 'caterer', 'decorator', 'entertainment', 'other'];
+const { VENDOR_CATEGORY_VALUES } = require('../constants/vendorCategories');
 
 router.post(
   '/',
   protect,
   requireRole('vendor'),
   [
-    body('category').isIn(validCategories).withMessage('Invalid category'),
-    body('businessName').trim().notEmpty().withMessage('Business name is required'),
-    body('description').optional().isString(),
-    body('location').optional().isString(),
-    body('priceRange.min').optional().isFloat({ min: 0 }).withMessage('Min price must be a positive number'),
-    body('priceRange.max').optional().isFloat({ min: 0 }).withMessage('Max price must be a positive number')
+    body('category').isIn(VENDOR_CATEGORY_VALUES).withMessage('Invalid category'),
+    body('customCategoryLabel').optional().isString().isLength({ max: 60 }),
+    body('businessName').optional().isString().isLength({ max: 100 }),
+    body('description').trim().notEmpty().withMessage('Description is required').isLength({ max: 1000 }),
+    body('location').optional().isString().isLength({ max: 100 }),
+    body('priceType').optional().isIn(['fixed', 'negotiable']),
+    body('fixedAmount').optional().isFloat({ min: 0 }),
+    body('negotiableOpen').optional().isBoolean(),
+    body('negotiableMin').optional().isFloat({ min: 0 }),
+    body('negotiableMax').optional().isFloat({ min: 0 })
   ],
   validate,
   createVendorProfile
@@ -48,9 +51,15 @@ router.put(
   requireRole('vendor'),
   [
     param('id').isMongoId().withMessage('Invalid vendor ID'),
-    body('businessName').optional().trim().notEmpty().withMessage('Business name cannot be empty'),
-    body('priceRange.min').optional().isFloat({ min: 0 }),
-    body('priceRange.max').optional().isFloat({ min: 0 })
+    body('businessName').optional().isString().isLength({ max: 100 }),
+    body('customCategoryLabel').optional().isString().isLength({ max: 60 }),
+    body('description').optional().trim().isLength({ max: 1000 }),
+    body('location').optional().isString().isLength({ max: 100 }),
+    body('priceType').optional().isIn(['fixed', 'negotiable']),
+    body('fixedAmount').optional().isFloat({ min: 0 }),
+    body('negotiableOpen').optional().isBoolean(),
+    body('negotiableMin').optional().isFloat({ min: 0 }),
+    body('negotiableMax').optional().isFloat({ min: 0 })
   ],
   validate,
   updateVendorProfile
