@@ -7,7 +7,8 @@ const {
   getMyProjects,
   getProjectById,
   updateProject,
-  deleteProject
+  deleteProject,
+  toggleFavorite
 } = require('../controllers/projectController');
 const { protect } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roleCheck');
@@ -25,6 +26,14 @@ router.post(
   ],
   validate,
   createProject
+);
+
+router.post(
+  '/:id/favorite',
+  protect,
+  [param('id').isMongoId().withMessage('Invalid project ID')],
+  validate,
+  toggleFavorite
 );
 
 router.get('/', protect, getMyProjects);

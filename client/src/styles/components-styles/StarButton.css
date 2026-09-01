@@ -1,0 +1,16 @@
+.star-button {
+  background: transparent;
+  border: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--line);
+  padding: 4px;
+}
+
+.star-button.favorited {
+  color: var(--brass);
+}
+
+.star-button:hover {
+  color: var(--brass);
+}

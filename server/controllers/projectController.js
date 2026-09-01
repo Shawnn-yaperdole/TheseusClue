@@ -24,12 +24,28 @@ const createProject = asyncHandler(async (req, res) => {
 
 // @route GET /api/projects
 const getMyProjects = asyncHandler(async (req, res) => {
-  const projects = await Project.find({
+  const { search, status, sort } = req.query;
+
+  const filter = {
     $or: [
       { ownerId: req.user.id },
       { 'collaborators.userId': req.user.id }
     ]
-  }).sort({ updatedAt: -1 });
+  };
+
+  if (search) {
+    filter.title = { $regex: search, $options: 'i' };
+  }
+
+  if (status) {
+    filter.status = status;
+  }
+
+  let sortOption = { updatedAt: -1 };
+  if (sort === 'oldest') sortOption = { updatedAt: 1 };
+  if (sort === 'recent') sortOption = { updatedAt: -1 };
+
+  const projects = await Project.find(filter).sort(sortOption);
 
   res.json(projects);
 });
@@ -50,6 +66,27 @@ const getProjectById = asyncHandler(async (req, res) => {
   }
 
   res.json(project);
+});
+
+// @route POST /api/projects/:id/favorite
+const toggleFavorite = asyncHandler(async (req, res) => {
+  const project = await Project.findById(req.params.id);
+  if (!project) throw new AppError('Project not found', 404);
+
+  const isOwner = project.ownerId.equals(req.user.id);
+  const isCollaborator = project.collaborators.some((c) => c.userId.equals(req.user.id) && c.inviteStatus === 'accepted');
+  if (!isOwner && !isCollaborator) throw new AppError('Forbidden', 403);
+
+  const alreadyFavorited = project.favoritedBy.some((u) => u.equals(req.user.id));
+
+  if (alreadyFavorited) {
+    project.favoritedBy = project.favoritedBy.filter((u) => !u.equals(req.user.id));
+  } else {
+    project.favoritedBy.push(req.user.id);
+  }
+
+  await project.save();
+  res.json({ favorited: !alreadyFavorited });
 });
 
 // @route PUT /api/projects/:id
@@ -98,5 +135,6 @@ module.exports = {
   getMyProjects,
   getProjectById,
   updateProject,
-  deleteProject
+  deleteProject,
+  toggleFavorite
 };

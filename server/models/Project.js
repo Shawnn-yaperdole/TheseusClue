@@ -66,6 +66,7 @@ const projectSchema = new mongoose.Schema(
       default: 'draft'
     },
     collaborators: [collaboratorSchema],
+    favoritedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     groupChatId: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', default: null }
   },
   { timestamps: true }
