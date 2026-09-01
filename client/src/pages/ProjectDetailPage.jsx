@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getProjectById } from '../api/projects';
+import { getProjectById, updateProject } from '../api/projects';
 import {
   inviteCollaborator,
   respondToInvite,
@@ -10,13 +10,22 @@ import {
 } from '../api/collaborators';
 import { getOrCreateSingleChat } from '../api/chats';
 import { getVendors } from '../api/vendors';
+import { getCategoryLabel } from '../constants/vendorCategories';
 import { useAuthStore } from '../store/authStore';
 import AppShell from '../components/AppShell';
 import StatusBadge from '../components/StatusBadge';
 import LockSeal from '../components/LockSeal';
-import '../styles/pages-styles/ProjectDetailPage.css';
 import BackButton from '../components/BackButton';
-import { getCategoryLabel } from '../constants/vendorCategories';
+import '../styles/pages-styles/ProjectDetailPage.css';
+
+const emptyEditForm = {
+  title: '',
+  description: '',
+  budgetTotal: '',
+  venueName: '',
+  venueAddress: '',
+  schedule: []
+};
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
@@ -30,6 +39,11 @@ export default function ProjectDetailPage() {
 
   const [termsForm, setTermsForm] = useState({ price: '', deliverables: '', dateConfirmed: '', notes: '' });
   const [activeTermsTarget, setActiveTermsTarget] = useState(null);
+
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(emptyEditForm);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const fetchProject = async () => {
     try {
@@ -48,6 +62,7 @@ export default function ProjectDetailPage() {
 
   const isOwner = project && project.ownerId._id === currentUser.id;
   const myCollaboratorEntry = project?.collaborators.find((c) => c.userId._id === currentUser.id);
+  const canEdit = isOwner && project && !['locked', 'in_progress', 'completed'].includes(project.status);
 
   const handleVendorSearch = async (e) => {
     e.preventDefault();
@@ -64,12 +79,12 @@ export default function ProjectDetailPage() {
     try {
       const chatRes = await getOrCreateSingleChat(vendor.userId._id);
       const vendorCategoryLabel = vendor.category === 'other'
-      ? (vendor.customCategoryLabel || 'Other')
-      : getCategoryLabel(vendor.category);
-      
+        ? (vendor.customCategoryLabel || 'Other')
+        : getCategoryLabel(vendor.category);
+
       await inviteCollaborator(id, {
         targetUserId: vendor.userId._id,
-        vendorCategory: vendor.category,
+        vendorCategory: vendorCategoryLabel,
         chatId: chatRes.data._id
       });
       setShowPicker(false);
@@ -129,6 +144,76 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const startEditing = () => {
+    setEditForm({
+      title: project.title || '',
+      description: project.description || '',
+      budgetTotal: project.budget?.total ?? '',
+      venueName: project.venue?.name || '',
+      venueAddress: project.venue?.address || '',
+      schedule: project.schedule?.length
+        ? project.schedule.map((s) => ({
+            item: s.item || '',
+            date: s.date ? s.date.slice(0, 10) : '',
+            time: s.time || ''
+          }))
+        : []
+    });
+    setEditError('');
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditForm(emptyEditForm);
+    setEditError('');
+  };
+
+  const addScheduleRow = () => {
+    setEditForm((prev) => ({
+      ...prev,
+      schedule: [...prev.schedule, { item: '', date: '', time: '' }]
+    }));
+  };
+
+  const updateScheduleRow = (index, key, value) => {
+    setEditForm((prev) => ({
+      ...prev,
+      schedule: prev.schedule.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+    }));
+  };
+
+  const removeScheduleRow = (index) => {
+    setEditForm((prev) => ({
+      ...prev,
+      schedule: prev.schedule.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSaveDetails = async (e) => {
+    e.preventDefault();
+    setSavingDetails(true);
+    setEditError('');
+
+    try {
+      await updateProject(id, {
+        title: editForm.title,
+        description: editForm.description,
+        budget: { total: Number(editForm.budgetTotal) || 0 },
+        venue: { name: editForm.venueName, address: editForm.venueAddress },
+        schedule: editForm.schedule
+          .filter((row) => row.item.trim())
+          .map((row) => ({ item: row.item, date: row.date || null, time: row.time }))
+      });
+      setEditing(false);
+      fetchProject();
+    } catch (err) {
+      setEditError(err.response?.data?.message || 'Failed to save changes');
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
   if (loading) return <AppShell><p className="muted">Loading project…</p></AppShell>;
   if (!project) return <AppShell><p className="muted">Project not found.</p></AppShell>;
 
@@ -138,6 +223,7 @@ export default function ProjectDetailPage() {
   return (
     <AppShell>
       <BackButton fallback="/events" label="back to events" />
+
       <div className="project-header">
         <div>
           <div className="project-header-title-row">
@@ -146,15 +232,138 @@ export default function ProjectDetailPage() {
           </div>
           {project.description && <p className="project-description">{project.description}</p>}
         </div>
+        {canEdit && !editing && (
+          <button className="btn-secondary" onClick={startEditing}>Edit details</button>
+        )}
       </div>
 
       <div className="project-layout">
         {/* Main column */}
         <div>
-          <div className="panel">
-            <p className="panel-title">Budget</p>
-            <div className="budget-figure">${(project.budget?.total || 0).toLocaleString()}</div>
-          </div>
+          {editing ? (
+            <form className="panel" onSubmit={handleSaveDetails}>
+              <p className="panel-title">Edit event details</p>
+              {editError && <div className="auth-error">{editError}</div>}
+
+              <label className="field">
+                <span className="field-label">Title</span>
+                <input
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span className="field-label">Description</span>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  rows={3}
+                />
+              </label>
+
+              <label className="field">
+                <span className="field-label">Budget total ($)</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.budgetTotal}
+                  onChange={(e) => setEditForm({ ...editForm, budgetTotal: e.target.value })}
+                />
+              </label>
+
+              <div className="field-row">
+                <label className="field">
+                  <span className="field-label">Venue name</span>
+                  <input
+                    value={editForm.venueName}
+                    onChange={(e) => setEditForm({ ...editForm, venueName: e.target.value })}
+                    placeholder="e.g. Sunset Garden Hall"
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Venue address</span>
+                  <input
+                    value={editForm.venueAddress}
+                    onChange={(e) => setEditForm({ ...editForm, venueAddress: e.target.value })}
+                  />
+                </label>
+              </div>
+
+              <span className="field-label" style={{ display: 'block', marginTop: 'var(--space-4)' }}>Schedule</span>
+              {editForm.schedule.length === 0 && (
+                <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>No schedule items yet.</p>
+              )}
+              {editForm.schedule.map((row, i) => (
+                <div className="schedule-edit-row" key={i}>
+                  <input
+                    placeholder="Item (e.g. Ceremony)"
+                    value={row.item}
+                    onChange={(e) => updateScheduleRow(i, 'item', e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    value={row.date}
+                    onChange={(e) => updateScheduleRow(i, 'date', e.target.value)}
+                  />
+                  <input
+                    type="time"
+                    value={row.time}
+                    onChange={(e) => updateScheduleRow(i, 'time', e.target.value)}
+                  />
+                  <button type="button" className="btn-danger-ghost" onClick={() => removeScheduleRow(i)}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="btn-secondary" onClick={addScheduleRow} style={{ marginTop: 'var(--space-2)' }}>
+                + Add schedule item
+              </button>
+
+              <div className="btn-row" style={{ marginTop: 'var(--space-5)' }}>
+                <button type="submit" className="btn-primary" disabled={savingDetails} style={{ width: 'auto', padding: '11px 24px' }}>
+                  {savingDetails ? 'Saving…' : 'Save changes'}
+                </button>
+                <button type="button" className="btn-secondary" onClick={cancelEditing}>Cancel</button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <div className="panel">
+                <p className="panel-title">Budget</p>
+                <div className="budget-figure">${(project.budget?.total || 0).toLocaleString()}</div>
+              </div>
+
+              <div className="panel">
+                <p className="panel-title">Venue</p>
+                {project.venue?.name || project.venue?.address ? (
+                  <>
+                    <p style={{ fontWeight: 600, marginBottom: 4 }}>{project.venue.name || 'Unnamed venue'}</p>
+                    <p className="muted">{project.venue.address}</p>
+                  </>
+                ) : (
+                  <p className="muted">No venue set yet.</p>
+                )}
+              </div>
+
+              <div className="panel">
+                <p className="panel-title">Schedule</p>
+                {project.schedule?.length ? (
+                  project.schedule.map((s, i) => (
+                    <div className="schedule-row" key={i}>
+                      <span className="schedule-item-name">{s.item}</span>
+                      <span className="schedule-item-when">
+                        {s.date ? new Date(s.date).toLocaleDateString() : ''} {s.time || ''}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="muted">No schedule items yet.</p>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="panel">
             <p className="panel-title">Collaborators</p>
