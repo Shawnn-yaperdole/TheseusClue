@@ -8,10 +8,14 @@ const {
   getProjectById,
   updateProject,
   deleteProject,
-  toggleFavorite
+  toggleFavorite,
+  toggleOpenToRequests,
+  getOpenProjects,
+  getRecommendations
 } = require('../controllers/projectController');
 const { protect } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roleCheck');
+const { VENDOR_CATEGORY_VALUES } = require('../constants/vendorCategories');
 
 router.post(
   '/',
@@ -22,7 +26,6 @@ router.post(
     body('description').optional().isString(),
     body('budget.total').optional().isFloat({ min: 0 }).withMessage('Budget total must be a positive number'),
     body('schedule').optional().isArray(),
-    body('venue').optional().isObject()
   ],
   validate,
   createProject
@@ -36,6 +39,17 @@ router.post(
   toggleFavorite
 );
 
+router.post(
+  '/:id/toggle-open',
+  protect,
+  requireRole('planner'),
+  [param('id').isMongoId().withMessage('Invalid project ID')],
+  validate,
+  toggleOpenToRequests
+);
+
+router.get('/open/browse', protect, requireRole('vendor'), getOpenProjects);
+
 router.get('/', protect, getMyProjects);
 
 router.get(
@@ -46,6 +60,15 @@ router.get(
   getProjectById
 );
 
+router.get(
+  '/:id/recommendations',
+  protect,
+  requireRole('planner'),
+  [param('id').isMongoId().withMessage('Invalid project ID')],
+  validate,
+  getRecommendations
+);
+
 router.put(
   '/:id',
   protect,
@@ -53,7 +76,11 @@ router.put(
   [
     param('id').isMongoId().withMessage('Invalid project ID'),
     body('title').optional().trim().notEmpty().withMessage('Title cannot be empty'),
-    body('budget.total').optional().isFloat({ min: 0 }).withMessage('Budget total must be a positive number')
+    body('budget.total').optional().isFloat({ min: 0 }).withMessage('Budget total must be a positive number'),
+    body('requiredVendors').optional().isArray({ max: 20 }).withMessage('Too many required vendor entries'),
+    body('requiredVendors.*.category').optional().isIn(VENDOR_CATEGORY_VALUES).withMessage('Invalid vendor category'),
+    body('requiredVendors.*.customLabel').optional().isString().isLength({ max: 60 }),
+    body('requiredVendors.*.fulfilled').optional().isBoolean()
   ],
   validate,
   updateProject

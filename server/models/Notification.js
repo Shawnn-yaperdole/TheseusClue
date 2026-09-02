@@ -14,7 +14,10 @@ const notificationSchema = new mongoose.Schema(
         'terms_rejected',
         'project_locked',
         'collaborator_left',
-        'collaborator_removed'
+        'collaborator_removed',
+        'request_received',
+        'request_approved',
+        'request_declined'
       ],
       required: true
     },

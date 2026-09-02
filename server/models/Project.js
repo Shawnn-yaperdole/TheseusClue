@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { VENDOR_CATEGORY_VALUES } = require('../constants/vendorCategories');
 
 const collaboratorSchema = new mongoose.Schema(
   {
@@ -6,7 +7,7 @@ const collaboratorSchema = new mongoose.Schema(
     vendorCategory: { type: String, required: true },
     inviteStatus: {
       type: String,
-      enum: ['pending', 'accepted', 'declined', 'left', 'removed'],
+      enum: ['pending', 'requested', 'accepted', 'declined', 'left', 'removed'],
       default: 'pending'
     },
     termsStatus: {
@@ -25,13 +26,22 @@ const collaboratorSchema = new mongoose.Schema(
       {
         event: {
           type: String,
-          enum: ['invited', 'accepted', 'declined', 'left', 'removed', 're-invited', 'terms_proposed', 'terms_accepted', 'terms_rejected']
+          enum: ['invited', 'requested', 'accepted', 'declined', 'left', 'removed', 're-invited', 'terms_proposed', 'terms_accepted', 'terms_rejected']
         },
         at: { type: Date, default: Date.now }
       }
     ]
   },
-  { _id: false } // no need for a separate _id per collaborator sub-doc; userId is the identifier
+  { _id: false }
+);
+
+const requiredVendorSchema = new mongoose.Schema(
+  {
+    category: { type: String, enum: VENDOR_CATEGORY_VALUES, required: true },
+    customLabel: { type: String, trim: true, default: '' }, // used when category === 'other'
+    fulfilled: { type: Boolean, default: false }
+  },
+  { _id: false }
 );
 
 const projectSchema = new mongoose.Schema(
@@ -55,16 +65,13 @@ const projectSchema = new mongoose.Schema(
         time: { type: String }
       }
     ],
-    venue: {
-      name: { type: String, default: '' },
-      address: { type: String, default: '' },
-      vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
-    },
+    requiredVendors: [requiredVendorSchema],
     status: {
       type: String,
       enum: ['draft', 'building', 'pending_approval', 'locked', 'in_progress', 'completed', 'cancelled'],
       default: 'draft'
     },
+    openToRequests: { type: Boolean, default: false },
     collaborators: [collaboratorSchema],
     favoritedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     groupChatId: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', default: null }

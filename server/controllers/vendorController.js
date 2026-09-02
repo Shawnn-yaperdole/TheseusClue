@@ -1,6 +1,7 @@
 const VendorProfile = require('../models/VendorProfile');
 const User = require('../models/User');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
+const { syncVendorEmbedding } = require('../services/vendorEmbeddingService');
 
 const buildPricing = (category, body) => {
   if (category === 'other') return undefined;
@@ -55,6 +56,12 @@ const createVendorProfile = asyncHandler(async (req, res) => {
 
   await User.findByIdAndUpdate(req.user.id, { vendorProfile: vendorProfile._id });
 
+  try {
+    await syncVendorEmbedding(vendorProfile);
+  } catch (err) {
+    console.error('Embedding generation failed for new vendor profile:', err.message);
+  }
+  
   res.status(201).json(vendorProfile);
 });
 
@@ -112,6 +119,13 @@ const updateVendorProfile = asyncHandler(async (req, res) => {
   }
 
   await vendor.save();
+  
+  try {
+    await syncVendorEmbedding(vendor);
+  } catch (err) {
+    console.error('Embedding refresh failed for vendor profile update:', err.message);
+  }
+
   res.json(vendor);
 });
 

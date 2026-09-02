@@ -1,31 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getProjectById, updateProject } from '../api/projects';
+import { getProjectById, updateProject, toggleOpenToRequests } from '../api/projects';
 import {
   inviteCollaborator,
   respondToInvite,
   proposeTerms,
   respondToTerms,
-  leaveProject
+  leaveProject,
+  respondToRequest
 } from '../api/collaborators';
 import { getOrCreateSingleChat } from '../api/chats';
 import { getVendors } from '../api/vendors';
-import { getCategoryLabel } from '../constants/vendorCategories';
+import { VENDOR_CATEGORIES, getCategoryLabel } from '../constants/vendorCategories';
 import { useAuthStore } from '../store/authStore';
 import AppShell from '../components/AppShell';
 import StatusBadge from '../components/StatusBadge';
 import LockSeal from '../components/LockSeal';
 import BackButton from '../components/BackButton';
+import { getRecommendations } from '../api/projects';
 import '../styles/pages-styles/ProjectDetailPage.css';
 
 const emptyEditForm = {
   title: '',
   description: '',
   budgetTotal: '',
-  venueName: '',
-  venueAddress: '',
   schedule: []
 };
+
+const emptyTermsForm = { price: '', deliverables: '', dateConfirmed: '', notes: '' };
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
@@ -37,13 +39,42 @@ export default function ProjectDetailPage() {
   const [vendorResults, setVendorResults] = useState([]);
   const [showPicker, setShowPicker] = useState(false);
 
-  const [termsForm, setTermsForm] = useState({ price: '', deliverables: '', dateConfirmed: '', notes: '' });
+  const [termsForm, setTermsForm] = useState(emptyTermsForm);
   const [activeTermsTarget, setActiveTermsTarget] = useState(null);
 
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(emptyEditForm);
   const [savingDetails, setSavingDetails] = useState(false);
   const [editError, setEditError] = useState('');
+
+  const [newRequiredCategory, setNewRequiredCategory] = useState('');
+  const [newRequiredCustomLabel, setNewRequiredCustomLabel] = useState('');
+  const [requiredError, setRequiredError] = useState('');
+
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+
+  const projectRef = useRef(project);
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
+
+  const requiredVendorsQueueRef = useRef(Promise.resolve());
+
+  const queueRequiredVendorsUpdate = (updaterFn, onError) => {
+    const run = async () => {
+      const current = projectRef.current;
+      const updated = updaterFn(current.requiredVendors);
+      await updateProject(id, { requiredVendors: updated });
+      await fetchProject();
+    };
+
+    const next = requiredVendorsQueueRef.current.then(run, run).catch((err) => {
+      if (onError) onError(err);
+    });
+    requiredVendorsQueueRef.current = next;
+    return next;
+  };
 
   const fetchProject = async () => {
     try {
@@ -60,9 +91,31 @@ export default function ProjectDetailPage() {
     fetchProject();
   }, [id]);
 
-  const isOwner = project && project.ownerId._id === currentUser.id;
-  const myCollaboratorEntry = project?.collaborators.find((c) => c.userId._id === currentUser.id);
+  // Moved these above the useEffect below — they were previously declared
+  // after it, which caused "Cannot access 'isOwner' before initialization"
+  const isOwner = project && project.ownerId._id === currentUser?.id;
+  const myCollaboratorEntry = project?.collaborators.find((c) => c.userId._id === currentUser?.id);
   const canEdit = isOwner && project && !['locked', 'in_progress', 'completed'].includes(project.status);
+
+  useEffect(() => {
+    if (!project || !isOwner) return;
+    if (['locked', 'in_progress', 'completed'].includes(project.status)) return;
+    if (!project.requiredVendors?.some((r) => !r.fulfilled)) return;
+
+    const fetchRecs = async () => {
+      setLoadingRecs(true);
+      try {
+        const res = await getRecommendations(id);
+        setRecommendations(res.data.slots || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingRecs(false);
+      }
+    };
+    fetchRecs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.requiredVendors, isOwner]);
 
   const handleVendorSearch = async (e) => {
     e.preventDefault();
@@ -105,6 +158,25 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleRequestResponse = async (targetUserId, accept) => {
+    try {
+      await respondToRequest(id, { targetUserId, accept });
+      fetchProject();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to respond to request');
+    }
+  };
+
+  const openTermsForm = (targetUserId) => {
+    setTermsForm(emptyTermsForm);
+    setActiveTermsTarget(targetUserId);
+  };
+
+  const closeTermsForm = () => {
+    setActiveTermsTarget(null);
+    setTermsForm(emptyTermsForm);
+  };
+
   const handleProposeTerms = async (targetUserId) => {
     try {
       await proposeTerms(id, {
@@ -114,8 +186,7 @@ export default function ProjectDetailPage() {
         dateConfirmed: termsForm.dateConfirmed || null,
         notes: termsForm.notes
       });
-      setActiveTermsTarget(null);
-      setTermsForm({ price: '', deliverables: '', dateConfirmed: '', notes: '' });
+      closeTermsForm();
       fetchProject();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to propose terms');
@@ -144,13 +215,20 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleToggleOpen = async () => {
+    try {
+      await toggleOpenToRequests(id);
+      fetchProject();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update setting');
+    }
+  };
+
   const startEditing = () => {
     setEditForm({
       title: project.title || '',
       description: project.description || '',
       budgetTotal: project.budget?.total ?? '',
-      venueName: project.venue?.name || '',
-      venueAddress: project.venue?.address || '',
       schedule: project.schedule?.length
         ? project.schedule.map((s) => ({
             item: s.item || '',
@@ -200,7 +278,6 @@ export default function ProjectDetailPage() {
         title: editForm.title,
         description: editForm.description,
         budget: { total: Number(editForm.budgetTotal) || 0 },
-        venue: { name: editForm.venueName, address: editForm.venueAddress },
         schedule: editForm.schedule
           .filter((row) => row.item.trim())
           .map((row) => ({ item: row.item, date: row.date || null, time: row.time }))
@@ -212,6 +289,55 @@ export default function ProjectDetailPage() {
     } finally {
       setSavingDetails(false);
     }
+  };
+
+  const handleAddRequiredVendor = () => {
+    setRequiredError('');
+    if (!newRequiredCategory) {
+      setRequiredError('Choose a category first.');
+      return;
+    }
+    if (newRequiredCategory === 'other' && !newRequiredCustomLabel.trim()) {
+      setRequiredError('Please specify the vendor type.');
+      return;
+    }
+    const current = projectRef.current;
+    if (newRequiredCategory !== 'other' && current.requiredVendors.some((r) => r.category === newRequiredCategory)) {
+      setRequiredError('That category is already on the list.');
+      return;
+    }
+
+    const categoryToAdd = newRequiredCategory;
+    const customLabelToAdd = newRequiredCustomLabel;
+
+    queueRequiredVendorsUpdate(
+      (requiredVendors) => [
+        ...requiredVendors,
+        {
+          category: categoryToAdd,
+          customLabel: categoryToAdd === 'other' ? customLabelToAdd : '',
+          fulfilled: false
+        }
+      ],
+      (err) => setRequiredError(err.response?.data?.message || 'Failed to add requirement')
+    );
+
+    setNewRequiredCategory('');
+    setNewRequiredCustomLabel('');
+  };
+
+  const handleToggleFulfilled = (index) => {
+    queueRequiredVendorsUpdate(
+      (requiredVendors) => requiredVendors.map((r, i) => (i === index ? { ...r, fulfilled: !r.fulfilled } : r)),
+      (err) => alert(err.response?.data?.message || 'Failed to update')
+    );
+  };
+
+  const handleRemoveRequiredVendor = (index) => {
+    queueRequiredVendorsUpdate(
+      (requiredVendors) => requiredVendors.filter((_, i) => i !== index),
+      (err) => alert(err.response?.data?.message || 'Failed to remove')
+    );
   };
 
   if (loading) return <AppShell><p className="muted">Loading project…</p></AppShell>;
@@ -273,24 +399,6 @@ export default function ProjectDetailPage() {
                 />
               </label>
 
-              <div className="field-row">
-                <label className="field">
-                  <span className="field-label">Venue name</span>
-                  <input
-                    value={editForm.venueName}
-                    onChange={(e) => setEditForm({ ...editForm, venueName: e.target.value })}
-                    placeholder="e.g. Sunset Garden Hall"
-                  />
-                </label>
-                <label className="field">
-                  <span className="field-label">Venue address</span>
-                  <input
-                    value={editForm.venueAddress}
-                    onChange={(e) => setEditForm({ ...editForm, venueAddress: e.target.value })}
-                  />
-                </label>
-              </div>
-
               <span className="field-label" style={{ display: 'block', marginTop: 'var(--space-4)' }}>Schedule</span>
               {editForm.schedule.length === 0 && (
                 <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>No schedule items yet.</p>
@@ -336,18 +444,6 @@ export default function ProjectDetailPage() {
               </div>
 
               <div className="panel">
-                <p className="panel-title">Venue</p>
-                {project.venue?.name || project.venue?.address ? (
-                  <>
-                    <p style={{ fontWeight: 600, marginBottom: 4 }}>{project.venue.name || 'Unnamed venue'}</p>
-                    <p className="muted">{project.venue.address}</p>
-                  </>
-                ) : (
-                  <p className="muted">No venue set yet.</p>
-                )}
-              </div>
-
-              <div className="panel">
                 <p className="panel-title">Schedule</p>
                 {project.schedule?.length ? (
                   project.schedule.map((s, i) => (
@@ -363,6 +459,97 @@ export default function ProjectDetailPage() {
                 )}
               </div>
             </>
+          )}
+
+          <div className="panel">
+            <p className="panel-title">Required vendors</p>
+            {project.requiredVendors.length === 0 ? (
+              <p className="muted">No vendor requirements added yet.</p>
+            ) : (
+              project.requiredVendors.map((r, i) => {
+                const label = r.category === 'other' ? (r.customLabel || 'Other') : getCategoryLabel(r.category);
+                return (
+                  <div className="required-vendor-row" key={i}>
+                    <label className="required-vendor-check">
+                      <input
+                        type="checkbox"
+                        checked={r.fulfilled}
+                        disabled={!isOwner}
+                        onChange={() => handleToggleFulfilled(i)}
+                      />
+                      <span className={r.fulfilled ? 'required-vendor-label fulfilled' : 'required-vendor-label'}>
+                        {label}
+                      </span>
+                    </label>
+                    {isOwner && canEdit && (
+                      <button className="btn-danger-ghost" style={{ width: 'auto', padding: '4px 10px' }} onClick={() => handleRemoveRequiredVendor(i)}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+
+            {isOwner && canEdit && (
+              <div className="required-vendor-add">
+                {requiredError && <div className="auth-error" style={{ marginBottom: 'var(--space-3)' }}>{requiredError}</div>}
+                <div className="required-vendor-add-row">
+                  <select value={newRequiredCategory} onChange={(e) => setNewRequiredCategory(e.target.value)}>
+                    <option value="">Select a category…</option>
+                    {VENDOR_CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                  {newRequiredCategory === 'other' && (
+                    <input
+                      placeholder="Specify vendor type"
+                      value={newRequiredCustomLabel}
+                      onChange={(e) => setNewRequiredCustomLabel(e.target.value)}
+                    />
+                  )}
+                  <button type="button" className="btn-secondary" onClick={handleAddRequiredVendor}>
+                    + Add
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {isOwner && recommendations.length > 0 && (
+            <div className="panel">
+              <p className="panel-title">Suggested vendors</p>
+              {loadingRecs && <p className="muted">Finding matches…</p>}
+
+              {recommendations.map((slot) => {
+                const label = slot.category === 'other' ? (slot.customLabel || 'Other') : getCategoryLabel(slot.category);
+                return (
+                <div className="recommendation-slot" key={slot.slotIndex}>
+                  <p className="recommendation-slot-label">{label}</p>
+
+                  {slot.unsupported ? (
+                    <p className="muted" style={{ fontSize: '0.82rem' }}>
+                      AI matching isn't available for custom "Other" categories yet — use the vendor picker below instead.
+                      </p>
+                      ) : slot.vendors.length === 0 ? (
+                      <p className="muted" style={{ fontSize: '0.82rem' }}>No strong matches yet.</p>
+                    ) : (
+                      slot.vendors.map((v) => (
+                      <div className="recommendation-row" key={v._id}>
+                        <div>
+                          <strong>{v.businessName}</strong>
+                          <p className="muted" style={{ fontSize: '0.8rem', margin: '2px 0' }}>{v.description}</p>
+                          </div>
+                          {!alreadyInvitedIds.has(v.userId._id) && (
+                            <button className="btn-small btn-accept" onClick={() => handleInvite(v)}>Invite</button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
 
           <div className="panel">
@@ -388,6 +575,13 @@ export default function ProjectDetailPage() {
                     )}
                   </div>
 
+                  {isOwner && c.inviteStatus === 'requested' && (
+                    <div className="btn-row" style={{ marginTop: 'var(--space-2)' }}>
+                      <button className="btn-small btn-accept" onClick={() => handleRequestResponse(c.userId._id, true)}>Approve</button>
+                      <button className="btn-small btn-decline" onClick={() => handleRequestResponse(c.userId._id, false)}>Decline</button>
+                    </div>
+                  )}
+
                   {isOwner && c.inviteStatus === 'accepted' && c.termsStatus !== 'accepted' && (
                     <>
                       {activeTermsTarget === c.userId._id ? (
@@ -397,11 +591,11 @@ export default function ProjectDetailPage() {
                           <input type="date" value={termsForm.dateConfirmed} onChange={(e) => setTermsForm({ ...termsForm, dateConfirmed: e.target.value })} />
                           <div className="terms-form-actions">
                             <button className="btn-small btn-accept" onClick={() => handleProposeTerms(c.userId._id)}>Submit terms</button>
-                            <button className="btn-small btn-decline" onClick={() => setActiveTermsTarget(null)}>Cancel</button>
+                            <button className="btn-small btn-decline" onClick={closeTermsForm}>Cancel</button>
                           </div>
                         </div>
                       ) : (
-                        <button className="btn-secondary" onClick={() => setActiveTermsTarget(c.userId._id)}>Propose terms</button>
+                        <button className="btn-secondary" onClick={() => openTermsForm(c.userId._id)}>Propose terms</button>
                       )}
                     </>
                   )}
@@ -472,6 +666,18 @@ export default function ProjectDetailPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {isOwner && project.status !== 'locked' && (
+            <div className="action-card">
+              <p style={{ fontWeight: 600 }}>Open to requests</p>
+              <p className="muted" style={{ fontSize: '0.82rem' }}>
+                When on, vendors can find this event and request to join.
+              </p>
+              <button className="btn-secondary" onClick={handleToggleOpen}>
+                {project.openToRequests ? 'Turn off' : 'Turn on'}
+              </button>
             </div>
           )}
 

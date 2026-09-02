@@ -17,3 +17,9 @@ export const leaveProject = (projectId) =>
 
 export const removeCollaborator = (projectId, targetUserId) =>
   api.post(`/projects/${projectId}/remove`, { targetUserId });
+
+export const requestToJoin = (projectId, data) => 
+  api.post(`/projects/${projectId}/request`, data);
+
+export const respondToRequest = (projectId, data) => 
+  api.post(`/projects/${projectId}/request/respond`, data);

@@ -8,9 +8,12 @@ const {
   proposeTerms,
   respondToTerms,
   leaveProject,
-  removeCollaborator
+  removeCollaborator,
+  requestToJoin,
+  respondToRequest
 } = require('../controllers/collaboratorController');
 const { protect } = require('../middleware/auth');
+const { requireRole } = require('../middleware/roleCheck');
 
 router.post(
   '/:id/invite',
@@ -79,6 +82,31 @@ router.post(
   ],
   validate,
   removeCollaborator
+);
+
+router.post(
+  '/:id/request',
+  protect,
+  requireRole('vendor'),
+  [
+    param('id').isMongoId().withMessage('Invalid project ID'),
+    body('vendorCategory').trim().notEmpty().withMessage('Vendor category is required'),
+    body('chatId').optional().isMongoId().withMessage('Invalid chat ID')
+  ],
+  validate,
+  requestToJoin
+);
+
+router.post(
+  '/:id/request/respond',
+  protect,
+  [
+    param('id').isMongoId().withMessage('Invalid project ID'),
+    body('targetUserId').isMongoId().withMessage('Valid targetUserId is required'),
+    body('accept').isBoolean().withMessage('accept must be true or false')
+  ],
+  validate,
+  respondToRequest
 );
 
 module.exports = router;

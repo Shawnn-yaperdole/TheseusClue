@@ -9,12 +9,13 @@ const STATUS_CONFIG = {
   completed: { label: 'Completed', tone: 'moss' },
   cancelled: { label: 'Cancelled', tone: 'brick' },
   pending: { label: 'Pending', tone: 'brass' },
+  requested: { label: 'Requested', tone: 'brass' },
   accepted: { label: 'Accepted', tone: 'moss' },
   declined: { label: 'Declined', tone: 'brick' },
   left: { label: 'Left', tone: 'neutral' },
   removed: { label: 'Removed', tone: 'neutral' },
   not_submitted: { label: 'Not submitted', tone: 'neutral' },
-  rejected: { label: 'Rejected', tone: 'brick' }
+  rejected: { label: 'Rejected', tone: 'brick' },
 };
 
 export default function StatusBadge({ status }) {

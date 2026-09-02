@@ -21,4 +21,9 @@ const VENDOR_CATEGORIES = [
 
 const VENDOR_CATEGORY_VALUES = VENDOR_CATEGORIES.map((c) => c.value);
 
-module.exports = { VENDOR_CATEGORIES, VENDOR_CATEGORY_VALUES };
+const getCategoryLabel = (value) => {
+  const found = VENDOR_CATEGORIES.find((c) => c.value === value);
+  return found ? found.label : value;
+};
+
+module.exports = { VENDOR_CATEGORIES, VENDOR_CATEGORY_VALUES, getCategoryLabel };

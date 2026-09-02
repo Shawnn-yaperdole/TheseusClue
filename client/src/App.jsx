@@ -11,6 +11,7 @@ import ChatPage from './pages/ChatPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import PublicProfilePage from './pages/PublicProfilePage';
+import VendorHomePage from './pages/VendorHomePage';
 
 function App() {
   const initAuth = useAuthStore((state) => state.initAuth);
@@ -80,6 +81,14 @@ function App() {
             <PublicProfilePage />
           </ProtectedRoute>
         }
+        />
+        <Route
+        path="/vendor-home"
+        element={
+        <ProtectedRoute>
+          <VendorHomePage />
+        </ProtectedRoute>
+          }
         />
       </Routes>
     </BrowserRouter>

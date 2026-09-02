@@ -9,6 +9,10 @@ export default function AppShell({ children }) {
   const { user, logout } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const isVendor = user?.roles?.includes('vendor');
+  const eventsLink = isVendor ? '/vendor-home' : '/events';
+  const eventsLabel = isVendor ? 'Find Work' : 'Events';
+
   return (
     <div className="app-shell">
       <header className="app-nav">
@@ -28,8 +32,8 @@ export default function AppShell({ children }) {
 
         <div className={menuOpen ? 'app-nav-collapsible open' : 'app-nav-collapsible'}>
           <nav className="app-nav-links">
-            <NavLink to="/events" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'} onClick={() => setMenuOpen(false)}>
-              Events
+            <NavLink to={eventsLink} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'} onClick={() => setMenuOpen(false)}>
+              {eventsLabel}
             </NavLink>
             <NavLink to="/market" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'} onClick={() => setMenuOpen(false)}>
               Market

@@ -9,8 +9,8 @@ const vendorProfileSchema = new mongoose.Schema(
       enum: VENDOR_CATEGORY_VALUES,
       required: true
     },
-    customCategoryLabel: { type: String, trim: true, default: '' }, // only used when category === 'other'
-    businessName: { type: String, trim: true, default: '' }, // not required for 'other'
+    customCategoryLabel: { type: String, trim: true, default: '' },
+    businessName: { type: String, trim: true, default: '' },
     description: { type: String, required: true, trim: true },
     location: { type: String, default: '' },
     pricing: {
@@ -23,9 +23,19 @@ const vendorProfileSchema = new mongoose.Schema(
     portfolio: [{ type: String }],
     availability: [{ type: Date }],
     rating: { type: Number, default: 0 },
-    reviewCount: { type: Number, default: 0 }
+    reviewCount: { type: Number, default: 0 },
+    embedding: { type: [Number], default: undefined },
+    embeddingUpdatedAt: { type: Date, default: null }
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      transform: (doc, ret) => {
+        delete ret.embedding; // never send the raw vector to the client
+        return ret;
+      }
+    }
+  }
 );
 
 module.exports = mongoose.model('VendorProfile', vendorProfileSchema);

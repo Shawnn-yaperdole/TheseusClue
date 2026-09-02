@@ -6,15 +6,17 @@ export default function NewEventModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
     title: '',
     description: '',
-    budgetTotal: '',
-    venueName: ''
+    budgetTotal: ''
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) {
+      setError('Please enter a title.');
+      return;
+    }
     setSaving(true);
     setError('');
 
@@ -22,8 +24,7 @@ export default function NewEventModal({ onClose, onCreated }) {
       await createProject({
         title: form.title,
         description: form.description,
-        budget: { total: Number(form.budgetTotal) || 0 },
-        venue: { name: form.venueName }
+        budget: { total: Number(form.budgetTotal) || 0 }
       });
       onCreated();
     } catch (err) {
@@ -64,24 +65,15 @@ export default function NewEventModal({ onClose, onCreated }) {
             />
           </label>
 
-          <div className="field-row">
-            <label className="field">
-              <span className="field-label">Budget total ($)</span>
-              <input
-                type="number"
-                min="0"
-                value={form.budgetTotal}
-                onChange={(e) => setForm({ ...form, budgetTotal: e.target.value })}
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Venue (optional)</span>
-              <input
-                value={form.venueName}
-                onChange={(e) => setForm({ ...form, venueName: e.target.value })}
-              />
-            </label>
-          </div>
+          <label className="field">
+            <span className="field-label">Budget total ($)</span>
+            <input
+              type="number"
+              min="0"
+              value={form.budgetTotal}
+              onChange={(e) => setForm({ ...form, budgetTotal: e.target.value })}
+            />
+          </label>
 
           <div className="btn-row" style={{ marginTop: 'var(--space-4)' }}>
             <button type="submit" className="btn-primary" disabled={saving} style={{ width: 'auto', padding: '11px 24px' }}>

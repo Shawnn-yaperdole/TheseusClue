@@ -290,8 +290,8 @@ const respondToTerms = asyncHandler(async (req, res) => {
 const leaveProject = asyncHandler(async (req, res) => {
   const project = await Project.findById(req.params.id);
   if (!project) throw new AppError('Project not found', 404);
-  if (['locked', 'in_progress'].includes(project.status)) {
-    throw new AppError('Cannot leave a locked or in-progress project', 400);
+  if (['locked', 'in_progress', 'completed'].includes(project.status)) {
+    throw new AppError('Cannot leave a locked, in-progress, or completed project', 400);
   }
 
   const collaborator = project.collaborators.find((c) => c.userId.equals(req.user.id));
@@ -311,8 +311,8 @@ const removeCollaborator = asyncHandler(async (req, res) => {
   if (!project.ownerId.equals(req.user.id)) {
     throw new AppError('Only the owner can remove collaborators', 403);
   }
-  if (['locked', 'in_progress'].includes(project.status)) {
-    throw new AppError('Cannot remove collaborators from a locked project', 400);
+  if (['locked', 'in_progress', 'completed'].includes(project.status)) {
+    throw new AppError('Cannot remove collaborators from a locked, in-progress, or completed project', 400);
   }
 
   const collaborator = project.collaborators.find((c) => c.userId.equals(targetUserId));
@@ -321,6 +321,152 @@ const removeCollaborator = asyncHandler(async (req, res) => {
   }
 
   await removeCollaboratorInternal(project, collaborator, req.user.id, 'removed');
+  res.json(project);
+});
+
+// @route POST /api/projects/:id/request
+// @access vendor — initiates a request to join an open project
+const requestToJoin = asyncHandler(async (req, res) => {
+  const { vendorCategory, chatId } = req.body;
+  const project = await Project.findById(req.params.id);
+
+  if (!project) throw new AppError('Project not found', 404);
+  if (!project.openToRequests) throw new AppError('This project is not open to requests', 400);
+  if (['locked', 'in_progress', 'completed', 'cancelled'].includes(project.status)) {
+    throw new AppError('This project is no longer accepting requests', 400);
+  }
+  if (project.ownerId.equals(req.user.id)) {
+    throw new AppError("You can't request to join your own project", 400);
+  }
+
+  let collaborator = project.collaborators.find((c) => c.userId.equals(req.user.id));
+
+  if (collaborator && ['requested', 'pending', 'accepted'].includes(collaborator.inviteStatus)) {
+    throw new AppError('You already have an active request or invite on this project', 409);
+  }
+
+  if (collaborator) {
+    collaborator.inviteStatus = 'requested';
+    collaborator.termsStatus = 'not_submitted';
+    collaborator.proposedTerms = {};
+    collaborator.chatId = chatId || collaborator.chatId;
+    collaborator.history.push({ event: 'requested' });
+  } else {
+    project.collaborators.push({
+      userId: req.user.id,
+      vendorCategory,
+      inviteStatus: 'requested',
+      termsStatus: 'not_submitted',
+      chatId: chatId || null,
+      history: [{ event: 'requested' }]
+    });
+  }
+
+  await project.save();
+
+  if (chatId && ioInstance) {
+    await emitSystemMessage(
+      ioInstance,
+      chatId,
+      req.user.id,
+      `${req.user.name} has requested to join "${project.title}" as ${vendorCategory}.`,
+      'invite_sent'
+    );
+  }
+
+  if (ioInstance) {
+    await notify(ioInstance, project.ownerId, {
+      type: 'request_received',
+      message: `${req.user.name} requested to join "${project.title}" as ${vendorCategory}.`,
+      link: `/events/${project._id}`,
+      projectId: project._id
+    });
+  }
+
+  res.status(200).json(project);
+});
+
+// @route POST /api/projects/:id/request/respond
+// @access owner — approves or declines a vendor-initiated request
+const respondToRequest = asyncHandler(async (req, res) => {
+  const { targetUserId, accept } = req.body;
+  const project = await Project.findById(req.params.id);
+
+  if (!project) throw new AppError('Project not found', 404);
+  if (!project.ownerId.equals(req.user.id)) {
+    throw new AppError('Only the owner can respond to requests', 403);
+  }
+
+  const collaborator = project.collaborators.find((c) => c.userId.equals(targetUserId));
+  if (!collaborator || collaborator.inviteStatus !== 'requested') {
+    throw new AppError('No pending request found for this vendor', 404);
+  }
+
+  if (accept) {
+    collaborator.inviteStatus = 'accepted';
+    collaborator.termsStatus = 'pending';
+    collaborator.history.push({ event: 'accepted' });
+
+    if (project.status === 'draft' || project.status === 'building') {
+      project.status = 'pending_approval';
+    }
+
+    let groupChat;
+    if (project.groupChatId) {
+      groupChat = await Chat.findById(project.groupChatId);
+      if (groupChat && !groupChat.participants.some((p) => p.equals(targetUserId))) {
+        groupChat.participants.push(targetUserId);
+        await groupChat.save();
+      }
+    } else {
+      groupChat = await Chat.create({
+        type: 'group',
+        projectId: project._id,
+        participants: [project.ownerId, targetUserId],
+        messages: []
+      });
+      project.groupChatId = groupChat._id;
+    }
+
+    if (ioInstance) {
+      await emitSystemMessage(
+        ioInstance,
+        groupChat._id,
+        req.user.id,
+        `${collaborator.vendorCategory} request approved — welcome to the project.`,
+        'invite_accepted'
+      );
+      await notify(ioInstance, targetUserId, {
+        type: 'request_approved',
+        message: `Your request to join "${project.title}" was approved.`,
+        link: `/events/${project._id}`,
+        projectId: project._id
+      });
+    }
+  } else {
+    collaborator.inviteStatus = 'declined';
+    collaborator.history.push({ event: 'declined' });
+
+    if (ioInstance) {
+      if (collaborator.chatId) {
+        await emitSystemMessage(
+          ioInstance,
+          collaborator.chatId,
+          req.user.id,
+          'Your request to join this project was declined.',
+          'invite_declined'
+        );
+      }
+      await notify(ioInstance, targetUserId, {
+        type: 'request_declined',
+        message: `Your request to join "${project.title}" was declined.`,
+        link: `/events/${project._id}`,
+        projectId: project._id
+      });
+    }
+  }
+
+  await project.save();
   res.json(project);
 });
 
@@ -392,5 +538,7 @@ module.exports = {
   proposeTerms,
   respondToTerms,
   leaveProject,
-  removeCollaborator
+  removeCollaborator,
+  requestToJoin,
+  respondToRequest
 };

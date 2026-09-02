@@ -17,7 +17,9 @@ const env = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
   NODE_ENV: process.env.NODE_ENV || 'development',
-  IS_PRODUCTION: process.env.NODE_ENV === 'production'
+  IS_PRODUCTION: process.env.NODE_ENV === 'production',
+  VOYAGE_API_KEY: process.env.VOYAGE_API_KEY || null,
+  VOYAGE_MODEL: process.env.VOYAGE_MODEL || 'voyage-4'
 };
 
 module.exports = env;
