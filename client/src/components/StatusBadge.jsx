@@ -16,6 +16,7 @@ const STATUS_CONFIG = {
   removed: { label: 'Removed', tone: 'neutral' },
   not_submitted: { label: 'Not submitted', tone: 'neutral' },
   rejected: { label: 'Rejected', tone: 'brick' },
+  pending_payment: { label: 'Pending payment', tone: 'brass' },
 };
 
 export default function StatusBadge({ status }) {

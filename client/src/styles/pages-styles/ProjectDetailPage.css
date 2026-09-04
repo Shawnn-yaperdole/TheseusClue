@@ -125,6 +125,28 @@
   min-width: 140px;
 }
 
+.contact-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.88rem;
+}
+
+.contact-row:last-child {
+  border-bottom: none;
+}
+
+.contact-email {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--indigo);
+}
+
+.payment-form .field {
+  margin-bottom: var(--space-3);
+}
+
 @media (max-width: 600px) {
   .project-layout {
     grid-template-columns: 1fr;
@@ -400,3 +422,4 @@
   gap: var(--space-3);
   padding: var(--space-2) 0;
 }
+

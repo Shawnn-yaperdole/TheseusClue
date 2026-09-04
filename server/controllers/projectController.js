@@ -57,7 +57,7 @@ const getMyProjects = asyncHandler(async (req, res) => {
 // @route GET /api/projects/:id
 const getProjectById = asyncHandler(async (req, res) => {
   const project = await Project.findById(req.params.id)
-    .populate('ownerId', 'name email')
+    .populate('ownerId', 'name organizationName email')
     .populate('collaborators.userId', 'name email');
 
   if (!project) throw new AppError('Project not found', 404);
@@ -69,7 +69,16 @@ const getProjectById = asyncHandler(async (req, res) => {
     throw new AppError('Forbidden', 403);
   }
 
-  res.json(project);
+  const plain = project.toObject();
+  
+  if (plain.status !== 'locked') {
+    delete plain.ownerId.email;
+    plain.collaborators.forEach((c) => {
+      if (c.userId) delete c.userId.email;
+    });
+  }
+
+  res.json(plain);
 });
 
 // @route POST /api/projects/:id/favorite
@@ -102,8 +111,8 @@ const updateProject = asyncHandler(async (req, res) => {
     throw new AppError('Only the owner can edit this project', 403);
   }
 
-  if (['locked', 'in_progress', 'completed'].includes(project.status)) {
-    throw new AppError('Cannot edit a locked or completed project', 400);
+  if (['pending_payment', 'locked', 'in_progress', 'completed'].includes(project.status)) {
+    throw new AppError('Cannot edit a project that is pending payment, locked or completed project', 400);
   }
 
   const { title, description, budget, schedule, requiredVendors } = req.body;
@@ -141,8 +150,8 @@ const toggleOpenToRequests = asyncHandler(async (req, res) => {
   if (!project.ownerId.equals(req.user.id)) {
     throw new AppError('Only the owner can change this setting', 403);
   }
-  if (['locked', 'in_progress', 'completed', 'cancelled'].includes(project.status)) {
-    throw new AppError('Cannot change request settings on a locked or closed project', 400);
+  if (['pending_payment', 'locked', 'in_progress', 'completed', 'cancelled'].includes(project.status)) {
+    throw new AppError('Cannot change request settings at this stage', 400);
   }
 
   project.openToRequests = !project.openToRequests;

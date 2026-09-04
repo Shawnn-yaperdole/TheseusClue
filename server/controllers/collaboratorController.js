@@ -3,21 +3,28 @@ const Chat = require('../models/Chat');
 const { emitSystemMessage } = require('../sockets/chatSocket');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { notify } = require('../services/notificationService');
+const env = require('../config/env');
 
 let ioInstance = null;
 const setIo = (io) => { ioInstance = io; };
 
-const checkAndLockProject = async (project) => {
-  const activeCollaborators = project.collaborators.filter(
-    (c) => c.inviteStatus === 'accepted'
-  );
-
+// Moves a project from 'pending_approval'/'building' to 'pending_payment'
+// once every active collaborator has accepted terms. Actual locking now
+// happens only after the owner completes payment (see payForProject).
+const checkReadyForPayment = async (project) => {
+  const activeCollaborators = project.collaborators.filter((c) => c.inviteStatus === 'accepted');
   if (activeCollaborators.length === 0) return false;
 
   const allTermsAccepted = activeCollaborators.every((c) => c.termsStatus === 'accepted');
 
-  if (allTermsAccepted && project.status !== 'locked') {
-    project.status = 'locked';
+  if (allTermsAccepted && !['pending_payment', 'locked'].includes(project.status)) {
+    project.status = 'pending_payment';
+    project.payment = {
+      status: 'unpaid',
+      amount: env.PLATFORM_LOCK_FEE,
+      cardLast4: '',
+      paidAt: null
+    };
     await project.save();
 
     if (project.groupChatId && ioInstance) {
@@ -25,20 +32,18 @@ const checkAndLockProject = async (project) => {
         ioInstance,
         project.groupChatId,
         project.ownerId,
-        'All parties have accepted the terms. The event plan is now locked in!',
-        'project_locked'
+        'All parties have accepted the terms. Awaiting payment from the event planner to finalize and lock this event.',
+        'payment_required'
       );
     }
+
     if (ioInstance) {
-      const recipientIds = [project.ownerId, ...activeCollaborators.map((c) => c.userId)];
-      for (const recipientId of recipientIds) {
-        await notify(ioInstance, recipientId, {
-          type: 'project_locked',
-          message: `"${project.title}" is now locked in — all parties have agreed.`,
-          link: `/events/${project._id}`,
-          projectId: project._id
-        });
-      }
+      await notify(ioInstance, project.ownerId, {
+        type: 'payment_required',
+        message: `All parties have accepted the terms for "${project.title}". Pay the platform fee to finalize and lock the event.`,
+        link: `/events/${project._id}`,
+        projectId: project._id
+      });
     }
     return true;
   }
@@ -54,8 +59,8 @@ const inviteCollaborator = asyncHandler(async (req, res) => {
   if (!project.ownerId.equals(req.user.id)) {
     throw new AppError('Only the owner can invite collaborators', 403);
   }
-  if (['locked', 'in_progress', 'completed'].includes(project.status)) {
-    throw new AppError('Cannot invite to a locked or completed project', 400);
+  if (['pending_payment', 'locked', 'in_progress', 'completed'].includes(project.status)) {
+    throw new AppError('Cannot invite to a project that is pending payment, locked or completed project', 400);
   }
 
   let collaborator = project.collaborators.find((c) => c.userId.equals(targetUserId));
@@ -207,6 +212,9 @@ const proposeTerms = asyncHandler(async (req, res) => {
   if (!project.ownerId.equals(req.user.id)) {
     throw new AppError('Only the owner can propose terms', 403);
   }
+  if (['pending_payment', 'locked', 'in_progress', 'completed'].includes(project.status)) {
+    throw new AppError('Cannot modify terms once the project has moved to payment or beyond', 400);
+  }
 
   const collaborator = project.collaborators.find((c) => c.userId.equals(targetUserId));
   if (!collaborator || collaborator.inviteStatus !== 'accepted') {
@@ -270,7 +278,7 @@ const respondToTerms = asyncHandler(async (req, res) => {
     );
   }
 
-  const wasLocked = await checkAndLockProject(project);
+  const readyForPayment = await checkReadyForPayment(project);
 
   if (ioInstance) {
     await notify(ioInstance, project.ownerId, {
@@ -283,7 +291,7 @@ const respondToTerms = asyncHandler(async (req, res) => {
     });
   }
 
-  res.json({ project, locked: wasLocked });
+  res.json({ project, readyForPayment });
 });
 
 // @route POST /api/projects/:id/leave
@@ -332,7 +340,7 @@ const requestToJoin = asyncHandler(async (req, res) => {
 
   if (!project) throw new AppError('Project not found', 404);
   if (!project.openToRequests) throw new AppError('This project is not open to requests', 400);
-  if (['locked', 'in_progress', 'completed', 'cancelled'].includes(project.status)) {
+  if (['pending_payment', 'locked', 'in_progress', 'completed', 'cancelled'].includes(project.status)) {
     throw new AppError('This project is no longer accepting requests', 400);
   }
   if (project.ownerId.equals(req.user.id)) {
@@ -531,6 +539,70 @@ const removeCollaboratorInternal = async (project, collaborator, actingUserId, e
   }
 };
 
+// @route POST /api/projects/:id/pay
+// @access owner only, only while status === 'pending_payment'
+//
+// PLACEHOLDER PAYMENT FLOW. No real payment processor is connected.
+// Card fields are validated for shape only and are NEVER persisted —
+// only a non-sensitive last4 + amount + timestamp are stored, mirroring
+// how a real gateway (e.g. Stripe) hands back a token instead of raw
+// card data. Do not treat this as PCI-compliant; replace before going live.
+const payForProject = asyncHandler(async (req, res) => {
+  const { cardNumber, expiry, cvc, nameOnCard } = req.body;
+  const project = await Project.findById(req.params.id);
+
+  if (!project) throw new AppError('Project not found', 404);
+  if (!project.ownerId.equals(req.user.id)) {
+    throw new AppError('Only the event owner can complete payment', 403);
+  }
+  if (project.status !== 'pending_payment') {
+    throw new AppError('This project is not awaiting payment', 400);
+  }
+
+  const cleanedCard = (cardNumber || '').replace(/\s+/g, '');
+  if (!/^\d{13,19}$/.test(cleanedCard)) throw new AppError('Invalid card number', 400);
+  if (!/^\d{2}\/\d{2}$/.test(expiry || '')) throw new AppError('Invalid expiry date', 400);
+  if (!/^\d{3,4}$/.test(cvc || '')) throw new AppError('Invalid security code', 400);
+  if (!nameOnCard || !nameOnCard.trim()) throw new AppError('Name on card is required', 400);
+
+  // Simulated processing — always succeeds for now.
+  project.payment = {
+    status: 'paid',
+    amount: project.payment?.amount || env.PLATFORM_LOCK_FEE,
+    cardLast4: cleanedCard.slice(-4),
+    paidAt: new Date()
+  };
+  project.status = 'locked';
+  await project.save();
+
+  if (project.groupChatId && ioInstance) {
+    await emitSystemMessage(
+      ioInstance,
+      project.groupChatId,
+      project.ownerId,
+      'Payment received. The event plan is now locked in, and contact details have been shared between all parties.',
+      'project_locked'
+    );
+  }
+
+  if (ioInstance) {
+    const recipientIds = [
+      project.ownerId,
+      ...project.collaborators.filter((c) => c.inviteStatus === 'accepted').map((c) => c.userId)
+    ];
+    for (const recipientId of recipientIds) {
+      await notify(ioInstance, recipientId, {
+        type: 'project_locked',
+        message: `"${project.title}" is now locked in — contact details are now visible to everyone involved.`,
+        link: `/events/${project._id}`,
+        projectId: project._id
+      });
+    }
+  }
+
+  res.json(project);
+});
+
 module.exports = {
   setIo,
   inviteCollaborator,
@@ -540,5 +612,6 @@ module.exports = {
   leaveProject,
   removeCollaborator,
   requestToJoin,
-  respondToRequest
+  respondToRequest,
+  payForProject
 };

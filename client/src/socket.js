@@ -6,9 +6,12 @@ let socket = null;
 export const connectSocket = (token) => {
   if (socket) return socket;
 
-  socket = io(env.VITE_SOCKET_URL, {
+  socket = io(env.SOCKET_URL, {
     auth: { token }
   });
+
+  socket.on('connect', () => console.log('✅ Socket connected:', socket.id));
+  socket.on('connect_error', (err) => console.error('❌ Socket connect_error:', err.message));
 
   return socket;
 };

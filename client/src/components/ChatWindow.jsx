@@ -11,6 +11,7 @@ export default function ChatWindow({ chatId, onBack }) {
   const [input, setInput] = useState('');
   const currentUser = useAuthStore((state) => state.user);
   const messagesEndRef = useRef(null);
+  const [sendError, setSendError] = useState('');
 
   useEffect(() => {
     if (!chatId) return;
@@ -46,8 +47,14 @@ export default function ChatWindow({ chatId, onBack }) {
     e.preventDefault();
     if (!input.trim()) return;
     const socket = getSocket();
-    socket.emit('send_message', { chatId, content: input });
-    setInput('');
+    socket.emit('send_message', { chatId, content: input }, (response) => {
+      if (response?.success) { 
+        setInput('');
+        setSendError('');
+      } else {
+        setSendError(response?.reason || 'Message could not be sent.');
+      }
+    });
   };
 
   if (!chat) return <div className="chat-empty-state">Loading chat…</div>;
@@ -79,8 +86,13 @@ export default function ChatWindow({ chatId, onBack }) {
         <div ref={messagesEndRef} />
       </div>
 
+      {sendError && <div className="chat-send-error">{sendError}</div>}
       <form className="chat-window-input" onSubmit={handleSend}>
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type a message…" />
+        <input 
+        value={input} 
+        onChange={(e) => { setInput(e.target.value); if (sendError) setSendError(''); }} 
+        placeholder="Type a message…" 
+        />
         <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '10px 20px' }}>Send</button>
       </form>
     </div>

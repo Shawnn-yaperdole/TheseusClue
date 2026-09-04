@@ -10,7 +10,8 @@ const {
   leaveProject,
   removeCollaborator,
   requestToJoin,
-  respondToRequest
+  respondToRequest,
+  payForProject
 } = require('../controllers/collaboratorController');
 const { protect } = require('../middleware/auth');
 const { requireRole } = require('../middleware/roleCheck');
@@ -107,6 +108,20 @@ router.post(
   ],
   validate,
   respondToRequest
+);
+
+router.post(
+  '/:id/pay',
+  protect,
+  [
+    param('id').isMongoId().withMessage('Invalid project ID'),
+    body('cardNumber').isString().isLength({ min: 12, max: 24 }),
+    body('expiry').isString().isLength({ min: 4, max: 7 }),
+    body('cvc').isString().isLength({ min: 3, max: 4 }),
+    body('nameOnCard').isString().trim().notEmpty()
+  ],
+  validate,
+  payForProject
 );
 
 module.exports = router;

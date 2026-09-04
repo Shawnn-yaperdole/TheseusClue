@@ -23,3 +23,6 @@ export const requestToJoin = (projectId, data) =>
 
 export const respondToRequest = (projectId, data) => 
   api.post(`/projects/${projectId}/request/respond`, data);
+
+export const payForProject = (projectId, data) => 
+  api.post(`/projects/${projectId}/pay`, data);

@@ -7,7 +7,8 @@ import {
   proposeTerms,
   respondToTerms,
   leaveProject,
-  respondToRequest
+  respondToRequest,
+  payForProject
 } from '../api/collaborators';
 import { getOrCreateSingleChat } from '../api/chats';
 import { getVendors } from '../api/vendors';
@@ -19,6 +20,7 @@ import LockSeal from '../components/LockSeal';
 import BackButton from '../components/BackButton';
 import { getRecommendations } from '../api/projects';
 import '../styles/pages-styles/ProjectDetailPage.css';
+import PaymentPlaceholderForm from '../components/PaymentPlaceholderForm';
 
 const emptyEditForm = {
   title: '',
@@ -53,6 +55,9 @@ export default function ProjectDetailPage() {
 
   const [recommendations, setRecommendations] = useState([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
+
+  const [paySubmitting, setPaySubmitting] = useState(false);
+  const [payError, setPayError] = useState('');
 
   const projectRef = useRef(project);
   useEffect(() => {
@@ -95,7 +100,7 @@ export default function ProjectDetailPage() {
   // after it, which caused "Cannot access 'isOwner' before initialization"
   const isOwner = project && project.ownerId._id === currentUser?.id;
   const myCollaboratorEntry = project?.collaborators.find((c) => c.userId._id === currentUser?.id);
-  const canEdit = isOwner && project && !['locked', 'in_progress', 'completed'].includes(project.status);
+  const canEdit = isOwner && project && !['pending_payment', 'locked', 'in_progress', 'completed'].includes(project.status);
 
   useEffect(() => {
     if (!project || !isOwner) return;
@@ -196,8 +201,8 @@ export default function ProjectDetailPage() {
   const handleTermsResponse = async (accept) => {
     try {
       const res = await respondToTerms(id, accept);
-      if (res.data.locked) {
-        alert('All parties have accepted — this project is now locked in!');
+      if (res.data.readyForPayment) {
+        alert('All parties have accepted — this project is now required to finalize and lock this event');
       }
       fetchProject();
     } catch (err) {
@@ -338,6 +343,19 @@ export default function ProjectDetailPage() {
       (requiredVendors) => requiredVendors.filter((_, i) => i !== index),
       (err) => alert(err.response?.data?.message || 'Failed to remove')
     );
+  };
+
+  const handlePay = async (cardForm) => {
+    setPaySubmitting(true);
+    setPayError('');
+    try {
+      await payForProject(id, cardForm);
+      fetchProject();
+    } catch (err) {
+      setPayError(err.response?.data?.message || 'Payment failed');
+    } finally {
+      setPaySubmitting(false);
+    }
   };
 
   if (loading) return <AppShell><p className="muted">Loading project…</p></AppShell>;
@@ -603,6 +621,24 @@ export default function ProjectDetailPage() {
               ))
             )}
           </div>
+
+          {project.status === 'locked' && (
+            <div className="panel">
+              <p className="panel-title">Contacts</p>
+              <div className="contact-row">
+                <span>{project.ownerId.name} (Planner)</span>
+                <span className="contact-email">{project.ownerId.email}</span>
+              </div>
+              {project.collaborators
+                .filter((c) => c.inviteStatus === 'accepted')
+                .map((c) => (
+                  <div className="contact-row" key={c.userId._id}>
+                    <span>{c.userId.name} ({c.vendorCategory})</span>
+                    <span className="contact-email">{c.userId.email}</span>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -639,7 +675,7 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {isOwner && project.status !== 'locked' && (
+          {isOwner && !['pending_payment', 'locked'].includes(project.status) && (
             <div className="action-card">
               <p style={{ fontWeight: 600 }}>Build your team</p>
               {!showPicker ? (
@@ -669,7 +705,7 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {isOwner && project.status !== 'locked' && (
+          {isOwner && !['pending_payment', 'locked'].includes(project.status) && (
             <div className="action-card">
               <p style={{ fontWeight: 600 }}>Open to requests</p>
               <p className="muted" style={{ fontSize: '0.82rem' }}>
@@ -678,6 +714,30 @@ export default function ProjectDetailPage() {
               <button className="btn-secondary" onClick={handleToggleOpen}>
                 {project.openToRequests ? 'Turn off' : 'Turn on'}
               </button>
+            </div>
+          )}
+
+          {isOwner && project.status === 'pending_payment' && (
+            <div className="action-card terms-pending">
+              <p style={{ fontWeight: 600 }}>Finalize & lock event</p>
+              <p className="muted" style={{ fontSize: '0.82rem' }}>
+                All parties have accepted the terms. Pay the platform fee to lock this event and share contact details.
+              </p>
+              <PaymentPlaceholderForm
+                amount={project.payment?.amount || 0}
+                onSubmit={handlePay}
+                submitting={paySubmitting}
+                error={payError}
+              />
+            </div>
+          )}
+
+          {!isOwner && project.status === 'pending_payment' && myCollaboratorEntry?.inviteStatus === 'accepted' && (
+            <div className="action-card">
+              <p style={{ fontWeight: 600 }}>Awaiting payment</p>
+              <p className="muted" style={{ fontSize: '0.82rem' }}>
+                All terms are accepted. Waiting on the event planner to complete payment to finalize and lock this event.
+              </p>
             </div>
           )}
 

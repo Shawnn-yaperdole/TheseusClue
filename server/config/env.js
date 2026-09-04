@@ -19,7 +19,10 @@ const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   IS_PRODUCTION: process.env.NODE_ENV === 'production',
   VOYAGE_API_KEY: process.env.VOYAGE_API_KEY || null,
-  VOYAGE_MODEL: process.env.VOYAGE_MODEL || 'voyage-4'
+  VOYAGE_MODEL: process.env.VOYAGE_MODEL || 'voyage-4',
+  PLATFORM_LOCK_FEE: Number(process.env.PLATFORM_LOCK_FEE) || 25,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || null,
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
 };
 
 module.exports = env;

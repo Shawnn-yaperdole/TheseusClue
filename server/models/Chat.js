@@ -7,7 +7,7 @@ const messageSchema = new mongoose.Schema(
     content: { type: String, required: true },
     systemEvent: {
       type: String,
-      enum: ['invite_sent', 'invite_accepted', 'invite_declined', 'terms_proposed', 'terms_accepted', 'project_locked', 'member_left', 'member_removed', null],
+      enum: ['invite_sent', 'invite_accepted', 'invite_declined', 'terms_proposed', 'terms_accepted', 'project_locked', 'member_left', 'member_removed', 'payment_required', null],
       default: null
     }
   },

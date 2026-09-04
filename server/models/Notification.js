@@ -17,7 +17,8 @@ const notificationSchema = new mongoose.Schema(
         'collaborator_removed',
         'request_received',
         'request_approved',
-        'request_declined'
+        'request_declined',
+        'payment_required'
       ],
       required: true
     },

@@ -2,6 +2,8 @@ const jwt = require('jsonwebtoken');
 const Chat = require('../models/Chat');
 const { addMessage } = require('../controllers/chatController');
 const env = require('../config/env');
+const { moderateMessage } = require('../services/messageModerationService');
+const { isFilteringExempt } = require('../services/chatFilterExemption');
 
 const initChatSocket = (io) => {
   io.use((socket, next) => {
@@ -41,16 +43,31 @@ const initChatSocket = (io) => {
     });
 
     // Client sends a text message
-    socket.on('send_message', async ({ chatId, content }) => {
+    socket.on('send_message', async ({ chatId, content }, callback) => {
+      const ack = typeof callback === 'function' ? callback : () => {};
+
       try {
-        if (!content || !content.trim()) return;
+        if (!content || !content.trim()) {
+          return ack({ success: false, reason: 'Message cannot be empty.' });
+        }
+
+        const chat = await Chat.findById(chatId);
+        if (!chat) return ack({ success: false, reason: 'Chat not found.' });
+
+        const exempt = await isFilteringExempt(chat);
+
+        if (!exempt) {
+          const moderation = await moderateMessage(content);
+          if (moderation.blocked) {
+            return ack({ success: false, reason: moderation.reason, filtered: true });
+          }
+        }
 
         const message = await addMessage(chatId, socket.userId, content, 'text');
-
-        // Broadcast to everyone in the room, including sender (keeps UI simple/consistent)
         io.to(chatId).emit('new_message', { chatId, message });
+        ack({ success: true });
       } catch (err) {
-        socket.emit('error_message', { message: err.message });
+        ack({ success: false, reason: err.message });
       }
     });
 

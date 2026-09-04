@@ -154,6 +154,14 @@
   color: var(--ink);
 }
 
+.chat-send-error {
+  padding: 8px 16px;
+  background: rgba(168, 70, 47, 0.08);
+  border-top: 1px solid rgba(168, 70, 47, 0.25);
+  color: var(--brick);
+  font-size: 0.82rem;
+}
+
 @media (max-width: 760px) {
   .chat-layout {
     grid-template-columns: 1fr;

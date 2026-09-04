@@ -68,8 +68,14 @@ const projectSchema = new mongoose.Schema(
     requiredVendors: [requiredVendorSchema],
     status: {
       type: String,
-      enum: ['draft', 'building', 'pending_approval', 'locked', 'in_progress', 'completed', 'cancelled'],
+      enum: ['draft', 'building', 'pending_approval', 'pending_payment', 'locked', 'in_progress', 'completed', 'cancelled'],
       default: 'draft'
+    },
+    payment: {
+      status: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
+      amount: { type: Number, default: 0 },
+      cardLast4: { type: String, default: '' },
+      paidAt: { type: Date, default: null }
     },
     openToRequests: { type: Boolean, default: false },
     collaborators: [collaboratorSchema],
